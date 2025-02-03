@@ -13,14 +13,56 @@ import gr.imsi.athenarc.visual.middleware.cache.MinMaxCacheBuilder;
 import gr.imsi.athenarc.visual.middleware.cache.query.Query;
 import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
 import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
+import gr.imsi.athenarc.visual.middleware.methods.annotations.Parameter;
+import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 
+@VisualMethod(
+    name = "MinMaxCache",
+    description = "Cache-based visualization method using min-max aggregates"
+)
 public class MinMaxCacheMethod implements Method {
     private static final Logger LOG = LoggerFactory.getLogger(MinMaxCacheMethod.class);
 
-    private int aggFactor;
+    @Parameter(
+        name = "Data Reduction Factor",
+        description = "Controls the data reduction ratio (Integer)",
+        min = 0,
+        max = 12,
+        step = 1,
+        defaultValue = 6
+    )
     private int dataReductionRatio;
+
+    @Parameter(
+        name = "Prefetching Factor",
+        description = "Controls the prefetching amount (Float)",
+        min = 0,
+        max = 1,
+        step = 0.1,
+        defaultValue = 0
+    )
     private float prefetchingFactor;
 
+    @Parameter(
+        name = "Aggregation Factor",
+        description = "Controls the aggregation level (Integer)",
+        min = 2,
+        max = 16,
+        step = 2,
+        defaultValue = 4
+    )
+    private int aggFactor;
+
+    @Parameter(
+        name = "Accuracy",
+        description = "Controls the accuracy of results (Float)",
+        min = 0,
+        max = 1,
+        step = 0.01,
+        defaultValue = 0.95,
+        isQueryParameter = true
+    )
+    private float accuracy;
 
     // Map to hold the minmaxcache of each dataset
     private final ConcurrentHashMap<String, MinMaxCache> cacheMap = new ConcurrentHashMap<>();

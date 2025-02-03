@@ -1,6 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Query, QueryDto } from '../interfaces/query';
-import { act } from 'react';
+import {  QueryDto } from '../interfaces/query';
 
 
 interface QueryHistoryState {

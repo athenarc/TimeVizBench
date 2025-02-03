@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react';
+import apiService from '../../api/apiService';
+
 // Define types for method configurations
 export interface MethodParameter {
   label: string;
+  description: string;
   type: "number" | "boolean";
   default: number | boolean;
   min?: number; // Only for type "number"
@@ -9,55 +13,32 @@ export interface MethodParameter {
 }
 
 interface MethodConfig {
+    description: string;
     initParams: Record<string, MethodParameter>; // Initialization parameters
     queryParams: Record<string, MethodParameter>; // Query parameters
-  }
-  
+}
 
-// Define method configurations
-export const methodConfigurations: Record<string, MethodConfig> = {
-  MinMaxCache: {
-    initParams:{
-      dataReductionRatio: {
-          label: "Data Reduction Factor (Integer)",
-          type: "number",
-          default: 6,
-          min: 0,
-          max: 12,
-          step: 1,
-        },
-      prefetchingFactor: {
-        label: "Prefetching Factor (Float)",
-        type: "number",
-        default: 0,
-        min: 0,
-        max: 1,
-        step: 0.1,
-      },
-      aggFactor: {
-        label: "Aggregation Factor (Integer)",
-        type: "number",
-        default: 4,
-        min: 2,
-        max: 16,
-        step: 2,
-      },
-    },
-    queryParams: {
-      accuracy: {
-        label: "Accuracy (Float)",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.01,
-        default: 0.95,
-      },
-    },
-  },
-  M4: {
-    initParams: {
-    },
-    queryParams: {
-    },
-  },
+// Fetch configurations from backend
+export const useMethodConfigurations = () => {
+    const [methodConfigurations, setMethodConfigurations] = useState<Record<string, MethodConfig>>({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchConfigurations = async () => {
+            try {
+                const response = await apiService.get('/method-configurations');
+                setMethodConfigurations(response.data);
+            } catch (err) {
+                setError('Failed to load method configurations');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchConfigurations();
+    }, []);
+
+    return { methodConfigurations, loading, error };
 };

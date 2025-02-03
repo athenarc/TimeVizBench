@@ -26,7 +26,12 @@ import gr.imsi.athenarc.visual.middleware.domain.ErrorResults;
 import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
+import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 
+@VisualMethod(
+    name = "M4",
+    description = "Raw data representation method that uses reduction techniques to visualize large datasets"
+)
 public class M4Method implements Method {
 
 

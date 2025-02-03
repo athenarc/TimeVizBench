@@ -37,11 +37,11 @@ import {Measure, Metadata, metadataDtoToDomain} from '../interfaces/metadata';
 import {QueryResultsDto} from '../interfaces/data';
 import {Query, queryToQueryDto} from '../interfaces/query';
 import ResponseTimes from "components/ResponseTimes";
-import { methodConfigurations} from 'components/MethodSettings';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import ErrorMetrics from 'components/ErrorMetrics';
 import DataAccess from 'components/DataAccess';
+import { useMethodConfigurations } from '../components/MethodSettings';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -346,16 +346,21 @@ const Dashboard = () => {
     clearMeasures();
   };
 
+  const { methodConfigurations, loading: methodConfigLoading, error: methodConfigError } = useMethodConfigurations();
+
+  // Update handleMethodSelect to wait for configurations
   const handleMethodSelect = (event: SelectChangeEvent<string>) => {
     const method = event.target.value;
     setSelectedMethod(method);
-    // Initialize parameters with default values
-    const defaultParams = methodConfigurations[method]?.initParams || {};
-    const initializedParams = Object.keys(defaultParams).reduce((acc, key) => {
-      acc[key] = defaultParams[key].default;
-      return acc;
-    }, {} as Record<string, any>);
-    setInitParams(initializedParams);
+    if (methodConfigurations[method]?.initParams) {
+      const initializedParams = Object.keys(methodConfigurations[method].initParams).reduce((acc, key) => {
+        acc[key] = methodConfigurations[method].initParams[key].default;
+        return acc;
+      }, {} as Record<string, any>);
+      setInitParams(initializedParams);
+    } else {
+      setInitParams({});
+    }
   };
 
   const handleParamChange = (paramKey: string, value: any) => {
@@ -958,6 +963,10 @@ const Dashboard = () => {
       'Method',
       'From',
       'To',
+      'Width',
+      'Height',
+      'Schema',
+      'Dataset',
       'Measures',
       'Init Params',
       'Query Params',
@@ -973,10 +982,14 @@ const Dashboard = () => {
       const methodConfig = query.query.methodConfig;
       const fields = [
         new Date(timestamp).toISOString(),
-        instanceId,
+        formatInstanceId(instanceId),
         methodConfig.key,
         new Date(query.query.from).toISOString(),
         new Date(query.query.to).toISOString(),
+        query.query.width,
+        query.query.height,
+        query.query.schema,
+        query.query.table,
         escapeCSVField(query.query.measures),
         escapeCSVField(methodConfig.params),
         escapeCSVField(query.query.params),
@@ -1168,11 +1181,17 @@ const Dashboard = () => {
                                 <MenuItem value="" disabled>
                                   Select Method
                                 </MenuItem>
-                                {Object.keys(methodConfigurations).map((method) => (
-                                  <MenuItem key={method} value={method}>
-                                    {method}
-                                  </MenuItem>
-                                ))}
+                                {methodConfigLoading ? (
+                                  <MenuItem value="" disabled>Loading methods...</MenuItem>
+                                ) : methodConfigError ? (
+                                  <MenuItem value="" disabled>Error loading methods</MenuItem>
+                                ) : (
+                                  Object.keys(methodConfigurations).map((method) => (
+                                    <MenuItem key={method} value={method}>
+                                      {method}
+                                    </MenuItem>
+                                  ))
+                                )}
                               </Select>
                               {selectedMethod && (
                                 <Box mt={2}>
