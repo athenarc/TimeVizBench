@@ -13,7 +13,8 @@ interface DataServices {
     datasource: string,
     schema: string,
     table: string,
-  ): Promise<AxiosResponse<MetadataDto>>
+  ): Promise<AxiosResponse<MetadataDto>>,
+  clearCache(datasource: string): Promise<void>
 }
 
 const endpoints = {
@@ -23,6 +24,7 @@ const endpoints = {
     schema: string,
     table: string
   ) => `${prefix}/${datasource}/dataset/${schema}/${table}`,
+  clearCache: (datasource: string) => `${prefix}/${datasource}/clear_cache`,
 }
 
 export const services: DataServices = {
@@ -37,6 +39,14 @@ export const services: DataServices = {
       return null;
     }
     return response.data.queryResults;
+  },
+  clearCache: async (datasource: string): Promise<void> => {
+    try {
+      await apiClient.post(endpoints.clearCache(datasource));
+    } catch (error) {
+      console.error(`Failed to clear ${datasource} cache:`, error);
+      throw error;
+    }
   },
   getMetadata: async (
     datasource: string,

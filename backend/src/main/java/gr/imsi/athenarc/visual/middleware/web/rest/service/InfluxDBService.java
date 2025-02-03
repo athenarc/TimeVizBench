@@ -81,5 +81,13 @@ public class InfluxDBService {
         return (InfluxDBDataset) influxDBConnector.initializeDataset(schema, id);
     }
 
+    public void clearCache() {
+        // InfluxDB doesn't have a direct cache clearing mechanism
+        // We can force a query cache refresh by executing:
+        influxDBConnector.close();
+        // Reconnect with fresh client
+        initializeConnection();
+    }
+
 }
 

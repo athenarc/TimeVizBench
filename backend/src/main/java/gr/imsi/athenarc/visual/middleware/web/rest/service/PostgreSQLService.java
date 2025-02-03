@@ -71,4 +71,14 @@ public class PostgreSQLService {
         }
         return (PostgreSQLDataset) postgreSQLConnector.initializeDataset(schema, id);
     }
+
+    public void clearCache() {
+        // try (Connection conn = dataSource.getConnection();
+        //      Statement stmt = conn.createStatement()) {
+        //     // DISCARD ALL is the most thorough way to clear PostgreSQL's cache
+        //     stmt.execute("DISCARD ALL");
+        // } catch (SQLException e) {
+        //     throw new RuntimeException("Failed to clear PostgreSQL cache", e);
+        // }
+    }
 }

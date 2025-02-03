@@ -34,7 +34,7 @@ import { addQuery } from '../store/queryHistorySlice';
 import { RootState } from '../store/store';
 
 import {Measure, Metadata, metadataDtoToDomain} from '../interfaces/metadata';
-import {QueryResultsDto} from '../interfaces/data';
+import {QueryResultsDto, TimeSeriesPoint} from '../interfaces/data';
 import {Query, queryToQueryDto} from '../interfaces/query';
 import ResponseTimes from "components/ResponseTimes";
 import Button from '@mui/material/Button';
@@ -42,6 +42,7 @@ import TextField from '@mui/material/TextField';
 import ErrorMetrics from 'components/ErrorMetrics';
 import DataAccess from 'components/DataAccess';
 import { useMethodConfigurations } from '../components/MethodSettings';
+import { compare } from '../utils/ssim';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -890,12 +891,36 @@ const Dashboard = () => {
   };
 
   const calculateSSIM = (methodData: any[], referenceData: any[], width: number, height: number, instanceId: string) => {
-    // If the method is M4, return 1
-    if (instanceId.startsWith('M4')) {
-      return 1;
-    }
-    // Return random value for other methods
-    return 0.95 + (Math.random() * 0.01);
+
+    // Convert time series data to SVG path
+    const createPathData = (data: any[]) => {
+      const xScale = d3.scaleTime()
+        .domain(d3.extent(data, (d:TimeSeriesPoint) => new Date(d.timestamp)) as [Date, Date])
+        .range([margin.left, width - margin.right]);
+  
+      const yScale = d3.scaleLinear()
+        .domain(d3.extent(data, (d:TimeSeriesPoint) => d.value) as [number, number])
+        .range([height - margin.bottom, margin.top]);
+  
+      const line = d3.line()
+        .x((d:TimeSeriesPoint) => xScale(new Date(d.timestamp)))
+        .y((d:TimeSeriesPoint) => yScale(d.value));
+  
+      return line(data) || '';
+    };
+  
+    // Generate SVG path data for both series
+    const methodPathData = createPathData(methodData);
+    const referencePathData = createPathData(referenceData);
+  
+    // Calculate effective width and height (subtract margins)
+    const effectiveWidth = width - margin.left - margin.right;
+    const effectiveHeight = height - margin.top - margin.bottom;
+  
+    // Compare the two paths using SSIM
+    const result = compare(methodPathData, referencePathData, effectiveWidth, effectiveHeight);
+  
+    return result.ssim;
   };
 
   // Reset reference results when measures change

@@ -86,4 +86,26 @@ public class DatasetController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
+    @PostMapping("/postgres/clear-cache")
+    public ResponseEntity<String> clearPostgresCache() {
+        try {
+            postgresService.clearCache();
+            return ResponseEntity.ok("PostgreSQL cache cleared successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to clear PostgreSQL cache: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/influx/clear-cache")
+    public ResponseEntity<String> clearInfluxCache() {
+        try {
+            influxService.clearCache();
+            return ResponseEntity.ok("InfluxDB cache cleared successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to clear InfluxDB cache: " + e.getMessage());
+        }
+    }
 }

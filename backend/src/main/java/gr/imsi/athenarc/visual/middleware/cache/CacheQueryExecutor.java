@@ -41,7 +41,6 @@ import gr.imsi.athenarc.visual.middleware.domain.StatsAggregator;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
 import gr.imsi.athenarc.visual.middleware.domain.ViewPort;
-import gr.imsi.athenarc.visual.middleware.util.DateTimeUtil;
 
 public class CacheQueryExecutor {
 
