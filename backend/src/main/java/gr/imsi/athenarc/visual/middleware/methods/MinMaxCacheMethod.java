@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
 import gr.imsi.athenarc.visual.middleware.cache.MinMaxCache;
 import gr.imsi.athenarc.visual.middleware.cache.MinMaxCacheBuilder;
 import gr.imsi.athenarc.visual.middleware.cache.query.Query;
+import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
-import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.Parameter;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 

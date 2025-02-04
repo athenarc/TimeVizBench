@@ -1,9 +1,12 @@
-package gr.imsi.athenarc.visual.middleware.domain;
+package gr.imsi.athenarc.visual.middleware.cache.query;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.Range;
 import com.opencsv.CSVWriter;
+
+import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
+import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 
 import java.io.File;
 import java.io.FileWriter;

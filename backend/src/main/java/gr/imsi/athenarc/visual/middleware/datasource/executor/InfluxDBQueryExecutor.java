@@ -18,7 +18,6 @@ import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.ImmutableDataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.influxdb.InitQueries.*;
-import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +53,7 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
     }
 
     @Override
-    public QueryResults execute(DataSourceQuery q, QueryMethod method) {
+    public Map<Integer, List<DataPoint>> execute(DataSourceQuery q, QueryMethod method) {
         switch (method) {
             case M4:
                 return executeM4Query(q);
@@ -68,17 +67,17 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
     }
 
     @Override
-    public QueryResults executeM4Query(DataSourceQuery q) {
+    public Map<Integer, List<DataPoint>> executeM4Query(DataSourceQuery q) {
         return collect(executeM4InfluxQuery((InfluxDBQuery) q));
     }
 
     @Override
-    public QueryResults executeRawQuery(DataSourceQuery q) {
+    public Map<Integer, List<DataPoint>> executeRawQuery(DataSourceQuery q) {
         return collect(executeRawInfluxQuery((InfluxDBQuery) q));
     }
 
     @Override
-    public QueryResults executeMinMaxQuery(DataSourceQuery q) {return collect(executeMinMaxInfluxQuery((InfluxDBQuery) q));}
+    public Map<Integer, List<DataPoint>> executeMinMaxQuery(DataSourceQuery q) {return collect(executeMinMaxInfluxQuery((InfluxDBQuery) q));}
 
     @Override
     public void initialize(String path) throws FileNotFoundException {
@@ -308,9 +307,7 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
         return execute(flux);
     }
 
-
-    private QueryResults collect(List<FluxTable> tables) {
-        QueryResults queryResults = new QueryResults();
+    private Map<Integer, List<DataPoint>> collect(List<FluxTable> tables) {
         HashMap<Integer, List<DataPoint>> data = new HashMap<>();
         for (FluxTable fluxTable : tables) {
             List<FluxRecord> records = fluxTable.getRecords();
@@ -322,8 +319,7 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
             }
         }
         data.forEach((k, v) -> v.sort(Comparator.comparingLong(DataPoint::getTimestamp)));
-        queryResults.setData(data);
-        return queryResults;
+        return data;
     }
 
     public List<FluxTable> execute(String query) {

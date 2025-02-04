@@ -7,6 +7,14 @@ import {QueryDto} from "../interfaces/query";
 
 const prefix = '/data'
 
+interface DatabaseConfig {
+  type: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+}
+
 interface DataServices {
   getData(datasource: string, postData: QueryDto, signal: AbortSignal): Promise<QueryResultsDto | null>
   getMetadata(
@@ -14,7 +22,8 @@ interface DataServices {
     schema: string,
     table: string,
   ): Promise<AxiosResponse<MetadataDto>>,
-  clearCache(datasource: string): Promise<void>
+  clearCache(datasource: string): Promise<void>,
+  getDatabaseConfigs(): Promise<Record<string, DatabaseConfig>>
 }
 
 const endpoints = {
@@ -25,6 +34,7 @@ const endpoints = {
     table: string
   ) => `${prefix}/${datasource}/dataset/${schema}/${table}`,
   clearCache: (datasource: string) => `${prefix}/${datasource}/clear_cache`,
+  getConfig: () => `${prefix}/config`,
 }
 
 export const services: DataServices = {
@@ -54,5 +64,9 @@ export const services: DataServices = {
     table: string,
   ): Promise<AxiosResponse<MetadataDto>> => {
     return apiClient.get(endpoints.getMetadata(datasource, schema, table))
+  },
+  getDatabaseConfigs: async (): Promise<Record<string, DatabaseConfig>> => {
+    const response = await apiClient.get(endpoints.getConfig());
+    return response.data;
   }
 }

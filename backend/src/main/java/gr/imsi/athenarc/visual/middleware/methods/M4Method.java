@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Stopwatch;
 
+import gr.imsi.athenarc.visual.middleware.cache.query.ErrorResults;
 import gr.imsi.athenarc.visual.middleware.cache.query.QueryMethod;
 import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
@@ -22,8 +23,7 @@ import gr.imsi.athenarc.visual.middleware.datasource.query.CsvQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.DataSourceQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.SQLQuery;
-import gr.imsi.athenarc.visual.middleware.domain.ErrorResults;
-import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
+import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
@@ -54,7 +54,7 @@ public class M4Method implements Method {
 
         VisualQueryResults queryResults = new VisualQueryResults();
 
-        QueryResults m4Results = new QueryResults();
+        Map<Integer, List<DataPoint>>  m4Results = new HashMap<>();
         double queryTime = 0;
 
         Stopwatch stopwatch = Stopwatch.createStarted();
@@ -101,7 +101,7 @@ public class M4Method implements Method {
         for(Integer m : query.getMeasures()){
             error.put(m, new ErrorResults());
         }
-        queryResults.setData(m4Results.getData());
+        queryResults.setData(m4Results);
         queryResults.setTimeRange(new TimeRange(startPixelColumn, endPixelColumn));
         queryResults.setIoCount(4 * query.getWidth() * query.getMeasures().size());
         queryResults.setQueryTime(queryTime);

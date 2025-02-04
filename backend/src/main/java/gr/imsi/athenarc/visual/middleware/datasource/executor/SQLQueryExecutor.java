@@ -1,13 +1,14 @@
 package gr.imsi.athenarc.visual.middleware.datasource.executor;
 
 import gr.imsi.athenarc.visual.middleware.cache.query.QueryMethod;
+import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.PostgreSQLDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.query.DataSourceQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.SQLQuery;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.ImmutableDataPoint;
-import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,7 @@ public class SQLQueryExecutor implements QueryExecutor {
     }
 
     @Override
-    public QueryResults execute(DataSourceQuery q, QueryMethod method) throws SQLException {
+    public Map<Integer, List<DataPoint>> execute(DataSourceQuery q, QueryMethod method) throws SQLException {
         switch (method) {
             case M4:
                 return executeM4Query(q);
@@ -58,18 +59,18 @@ public class SQLQueryExecutor implements QueryExecutor {
     }
 
     @Override
-    public QueryResults executeM4Query(DataSourceQuery q) throws SQLException {
-        return collect(executeM4SqlQuery((SQLQuery) q));
+    public Map<Integer, List<DataPoint>> executeM4Query(DataSourceQuery q) throws SQLException {
+        return collectData(executeM4SqlQuery((SQLQuery) q));
     }
 
     @Override
-    public QueryResults executeRawQuery(DataSourceQuery q) throws SQLException {
-        return collect(executeRawSqlQuery((SQLQuery) q));
+    public Map<Integer, List<DataPoint>> executeRawQuery(DataSourceQuery q) throws SQLException {
+        return collectData(executeRawSqlQuery((SQLQuery) q));
     }
 
     @Override
-    public QueryResults executeMinMaxQuery(DataSourceQuery q) throws SQLException {
-        return collect(executeMinMaxSqlQuery((SQLQuery) q));
+    public Map<Integer, List<DataPoint>> executeMinMaxQuery(DataSourceQuery q) throws SQLException {
+        return collectData(executeMinMaxSqlQuery((SQLQuery) q));
     }
 
     @Override
@@ -131,8 +132,7 @@ public class SQLQueryExecutor implements QueryExecutor {
     }
 
 
-    private QueryResults collect(ResultSet resultSet) throws SQLException {
-        QueryResults queryResults = new QueryResults();
+    private Map<Integer, List<DataPoint>> collectData(ResultSet resultSet) throws SQLException {
         HashMap<Integer, List<DataPoint>> data = new HashMap<>();
         while(resultSet.next()){
             Integer measure = Arrays.asList(dataset.getHeader()).indexOf(resultSet.getString(1)); // measure
@@ -146,8 +146,7 @@ public class SQLQueryExecutor implements QueryExecutor {
                     new ImmutableDataPoint(epoch2, val, measure));
         }
         data.forEach((k, v) -> v.sort(Comparator.comparingLong(DataPoint::getTimestamp)));
-        queryResults.setData(data);
-        return queryResults;
+        return data;
     }
 
     public ResultSet execute(String query) throws SQLException {

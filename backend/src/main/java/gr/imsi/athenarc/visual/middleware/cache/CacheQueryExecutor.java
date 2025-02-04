@@ -19,8 +19,10 @@ import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
 
+import gr.imsi.athenarc.visual.middleware.cache.query.ErrorResults;
 import gr.imsi.athenarc.visual.middleware.cache.query.Query;
 import gr.imsi.athenarc.visual.middleware.cache.query.QueryMethod;
+import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.PostgreSQLDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.executor.CsvQueryExecutor;
@@ -32,10 +34,8 @@ import gr.imsi.athenarc.visual.middleware.datasource.query.DataSourceQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.SQLQuery;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
-import gr.imsi.athenarc.visual.middleware.domain.ErrorResults;
 import gr.imsi.athenarc.visual.middleware.domain.ImmutableDataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.PixelColumn;
-import gr.imsi.athenarc.visual.middleware.domain.QueryResults;
 import gr.imsi.athenarc.visual.middleware.domain.Stats;
 import gr.imsi.athenarc.visual.middleware.domain.StatsAggregator;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
@@ -270,13 +270,13 @@ public class CacheQueryExecutor {
         queryResults.setQueryTime(queryTime);
         queryResults.setTimeRange(new TimeRange(startPixelColumn, endPixelColumn));
         queryResults.setAggFactors(aggFactors);
-        queryResults.setLitPixels(litPixelsPerMeasure);
         queryResults.setIoCount(ioCount);
         return queryResults;
     }
 
     private QueryResults executeM4Query(Query query, QueryExecutor queryExecutor) {
         QueryResults queryResults = new QueryResults();
+        Map<Integer, List<DataPoint>> m4Data = new HashMap<>();
         double queryTime = 0;
 
         Stopwatch stopwatch = Stopwatch.createStarted();
@@ -313,7 +313,7 @@ public class CacheQueryExecutor {
             throw new RuntimeException("Unsupported query executor");
         }
         try {
-            queryResults = queryExecutor.execute(dataSourceQuery, QueryMethod.M4);
+            m4Data = queryExecutor.execute(dataSourceQuery, QueryMethod.M4);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
@@ -324,6 +324,7 @@ public class CacheQueryExecutor {
         for(Integer m : query.getMeasures()){
             error.put(m, new ErrorResults());
         }
+        queryResults.setData(m4Data);
         queryResults.setError(error);
         queryResults.setTimeRange(new TimeRange(startPixelColumn, endPixelColumn));
         queryTime = stopwatch.elapsed(TimeUnit.NANOSECONDS) / Math.pow(10d, 9);

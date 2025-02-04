@@ -1,28 +1,49 @@
 package gr.imsi.athenarc.visual.middleware.methods;
+import java.lang.reflect.Constructor;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.reflections.Reflections;
+
 import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
+import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 
 public class MethodManager {
     private static final ConcurrentHashMap<String, Method> methodInstances = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Class<?>> methodClasses = new ConcurrentHashMap<>();
+    
+    static {
+        // Scan for classes with @VisualMethod annotation
+        Reflections reflections = new Reflections("gr.imsi.athenarc.visual.middleware.methods");
+        Set<Class<?>> foundMethodClasses = reflections.getTypesAnnotatedWith(VisualMethod.class);
+        
+        // Register found methods
+        for (Class<?> methodClass : foundMethodClasses) {
+            VisualMethod annotation = methodClass.getAnnotation(VisualMethod.class);
+            methodClasses.put(annotation.name(), methodClass);
+        }
+    }
 
-    // Method to get or initialize an method
-    public static Method getOrInitializeMethod(String methodName, String schema, String datasetId, DatasourceConnector connector, Map<String, String> params) {
-        String key = generateKey(methodName, datasetId);
+    public static Method getOrInitializeMethod(String methodKey, String schema, String datasetId, 
+            DatasourceConnector connector, Map<String, String> params) {
+        String key = generateKey(methodKey, datasetId);
+        String methodName = methodKey.split("-")[0];
         
         return methodInstances.computeIfAbsent(key, k -> {
-            Method method;
-            if (methodName.contains("MinMaxCache")) {
-                method = new MinMaxCacheMethod();
+            try {
+                Class<?> methodClass = methodClasses.get(methodName);
+                if (methodClass == null) {
+                    throw new IllegalArgumentException("Unsupported method: " + methodName);
+                }
+                
+                Constructor<?> constructor = methodClass.getDeclaredConstructor();
+                Method method = (Method) constructor.newInstance();
                 method.initialize(schema, datasetId, connector, params);
-            } else if (methodName.contains("M4")) {
-                method = new M4Method();
-                method.initialize(schema, datasetId, connector, params);
-            } else {
-                throw new IllegalArgumentException("Unsupported method: " + methodName);
+                return method;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to initialize method: " + methodName, e);
             }
-            return method;
         });
     }
 
