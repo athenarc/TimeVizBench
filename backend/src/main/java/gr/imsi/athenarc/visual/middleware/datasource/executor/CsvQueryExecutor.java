@@ -134,6 +134,11 @@ public class CsvQueryExecutor implements QueryExecutor {
     }
 
     @Override
+    public Map<Integer, List<DataPoint>> execute(String s) throws IOException {
+        throw new UnsupportedOperationException("Unsupported method");
+    }
+
+    @Override
     public Map<Integer, List<DataPoint>> executeM4Query(DataSourceQuery q) throws IOException {
         CsvQuery csvQuery = (CsvQuery) q;
         Iterable<String[]> csvDataPoints = executeCsvQuery(csvQuery);

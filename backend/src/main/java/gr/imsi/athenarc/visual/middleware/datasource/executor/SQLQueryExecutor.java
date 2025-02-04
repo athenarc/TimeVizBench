@@ -116,19 +116,19 @@ public class SQLQueryExecutor implements QueryExecutor {
 
     public ResultSet executeRawSqlQuery(SQLQuery q) throws SQLException{
         String query = q.rawQuerySkeleton();
-        return execute(query);
+        return executeDbQuery(query);
     }
 
 
     public ResultSet executeM4SqlQuery(SQLQuery q) throws SQLException {
         String query = q.m4QuerySkeleton();
-        return execute(query);
+        return executeDbQuery(query);
     }
 
 
     public ResultSet executeMinMaxSqlQuery(SQLQuery q) throws SQLException {
         String query = q.minMaxQuerySkeleton();
-        return execute(query);
+        return executeDbQuery(query);
     }
 
 
@@ -148,12 +148,18 @@ public class SQLQueryExecutor implements QueryExecutor {
         data.forEach((k, v) -> v.sort(Comparator.comparingLong(DataPoint::getTimestamp)));
         return data;
     }
+    
+    public Map<Integer, List<DataPoint>> execute(String query) throws SQLException {
+        return collectData(executeDbQuery(query));
+    }
 
-    public ResultSet execute(String query) throws SQLException {
+    public ResultSet executeDbQuery(String query) throws SQLException {
         LOG.debug("Executing Query: \n" + query);
         PreparedStatement preparedStatement =  connection.prepareStatement(query);
         return preparedStatement.executeQuery();
     }
+
+   
 
     public String getTable() {
         return table;

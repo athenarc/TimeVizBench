@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface QueryExecutor {
+    Map<Integer, List<DataPoint>> execute(String query) throws IOException, SQLException;
     Map<Integer, List<DataPoint>> execute(DataSourceQuery q, QueryMethod method) throws IOException, SQLException;
     Map<Integer, List<DataPoint>> executeM4Query(DataSourceQuery q) throws IOException, SQLException;
     Map<Integer, List<DataPoint>> executeRawQuery(DataSourceQuery q) throws IOException, SQLException;

@@ -292,19 +292,19 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
 
     public List<FluxTable> executeM4InfluxQuery(InfluxDBQuery q) {
         String flux = q.m4QuerySkeleton();
-        return execute(flux);
+        return executeDbQuery(flux);
     }
 
 
     public List<FluxTable> executeMinMaxInfluxQuery(InfluxDBQuery q) {
         String flux = q.minMaxQuerySkeleton();
-        return execute(flux);
+        return executeDbQuery(flux);
     }
 
 
     public List<FluxTable> executeRawInfluxQuery(InfluxDBQuery q){
         String flux = q.rawQuerySkeleton();
-        return execute(flux);
+        return executeDbQuery(flux);
     }
 
     private Map<Integer, List<DataPoint>> collect(List<FluxTable> tables) {
@@ -322,9 +322,14 @@ public class InfluxDBQueryExecutor implements QueryExecutor {
         return data;
     }
 
-    public List<FluxTable> execute(String query) {
+    public List<FluxTable> executeDbQuery(String query) {
         QueryApi queryApi = influxDBClient.getQueryApi();
         LOG.info("Executing Query: \n" + query);
         return queryApi.query(query);
+    }
+
+
+    public Map<Integer, List<DataPoint>> execute(String query) {
+        return collect(executeDbQuery(query));
     }
 }
