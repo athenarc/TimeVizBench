@@ -21,11 +21,11 @@ import gr.imsi.athenarc.visual.middleware.web.rest.repository.UserRepository;
 @EnableConfigurationProperties(RsaKeyConfigProperties.class)
 @EntityScan("gr.imsi.athenarc.visual.middleware.domain")
 @ComponentScan(basePackages = "gr.imsi.athenarc.visual.middleware.web.rest")
-public class CacheAPI {
-        private static final Logger LOG = LoggerFactory.getLogger(CacheAPI.class);
+public class TimeVizBench {
+        private static final Logger LOG = LoggerFactory.getLogger(TimeVizBench.class);
 
     public static void main(String[] args) {
-        ConfigurableApplicationContext ctx = SpringApplication.run(CacheAPI.class, args);
+        ConfigurableApplicationContext ctx = SpringApplication.run(TimeVizBench.class, args);
         ctx.registerShutdownHook();   
     }
 

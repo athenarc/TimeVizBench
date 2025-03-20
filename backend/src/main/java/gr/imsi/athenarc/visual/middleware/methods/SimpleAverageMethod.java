@@ -33,10 +33,10 @@ public class SimpleAverageMethod implements Method {
     @Parameter(
         name = "Interval (ms)",
         description = "The aggregation interval in milliseconds",
-        min = 1000,
+        min = -1,
         max = 12000000000L,
         step = 10000,
-        defaultValue = 10000, 
+        defaultValue = -1, 
         isQueryParameter = true
     )
     private long interval; 
@@ -62,23 +62,28 @@ public class SimpleAverageMethod implements Method {
      */
     @Override
     public VisualQueryResults executeQuery(VisualQuery query) {
-        String dbQuery = createAverageQuery(query);  // Changed to pass the full query object
-        if (query.getParams().containsKey("interval")) {
-            interval = Long.parseLong(query.getParams().get("interval"));
-        } else {
-            throw new IllegalArgumentException("Missing prefetchingFactor parameter for MinMaxCache method");
-        }
+
         VisualQueryResults results = new VisualQueryResults();
         DatasourceConnector datasourceConnector = dataSourceConnnectors.get(query.getTable());
         AbstractDataset dataset = datasourceConnector.initializeDataset(query.getSchema(), query.getTable());
         QueryExecutor queryExecutor = datasourceConnector.initializeQueryExecutor(dataset);
+        
         try {
             double startTime = System.currentTimeMillis();
-            Map<Integer, List<DataPoint>> data = queryExecutor.execute(dbQuery);
-            results.setData(data);
+            Map<Integer, List<DataPoint>> allData = new HashMap<>();
+            
+            // Process each measure in the query
+            for (Integer measureId : query.getMeasures()) {
+                String dbQuery = createAverageQuery(query, dataset, measureId);
+                Map<Integer, List<DataPoint>> measureData = queryExecutor.execute(dbQuery);
+                // Add this measure's data to the combined results
+                allData.putAll(measureData);
+            }
+            
+            results.setData(allData);
             results.setTimeRange(new TimeRange(query.getFrom(), query.getTo()));
-            results.setQueryTime(System.currentTimeMillis() - startTime);
-            results.setIoCount(data.size());
+            results.setQueryTime((System.currentTimeMillis() - startTime) / 1000);
+            results.setIoCount(allData.entrySet().stream().mapToInt(e -> e.getValue().size()).sum());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -89,20 +94,40 @@ public class SimpleAverageMethod implements Method {
      * Creates a Flux query that:
      * 1. Selects data from the specified bucket (schema)
      * 2. Filters for the exact time range from the visual query
-     * 3. Applies mean aggregation over the specified interval
+     * 3. Filters for a specific measure using the dataset header
+     * 4. Applies mean aggregation over pixel-based time intervals
      */
-    private String createAverageQuery(VisualQuery query) {
+    private String createAverageQuery(VisualQuery query, AbstractDataset dataset, int measureId) {
         String format = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+        
+        if (query.getParams().containsKey("interval")) {
+            interval = Long.parseLong(query.getParams().get("interval"));
+            if(interval <= 0) {
+                interval = (query.getTo() - query.getFrom())/ query.getWidth();
+            }
+        } else {
+            throw new IllegalArgumentException("Invalid interval parameter for SimpleAverage method");
+        }
+        // Calculate pixel-based interval
+        
+        // Get field name from dataset header if available
+        String fieldName = "value" + measureId;
+        if (dataset.getHeader() != null && measureId < dataset.getHeader().length) {
+            fieldName = dataset.getHeader()[measureId];
+        }
+                
         return String.format(
                 "from(bucket: \"%s\") " +
-                "|> range(start: %s, stop: %s) " +  // Changed to use specific timestamps
+                "|> range(start: %s, stop: %s) " +
                 "|> filter(fn: (r) => r[\"_measurement\"] == \"%s\") " +
+                "|> filter(fn: (r) => r[\"_field\"] == \"%s\") " + // Use field name from header when available
                 "|> aggregateWindow(every: %dms, fn: mean, createEmpty: false) " +
                 "|> yield(name: \"mean\")",
                 query.getSchema(), 
                 DateTimeUtil.format(query.getFrom(), format),
                 DateTimeUtil.format(query.getTo(), format),
-                query.getTable(), 
+                query.getTable(),
+                fieldName,
                 interval
         );
     }

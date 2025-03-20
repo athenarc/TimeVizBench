@@ -10,7 +10,10 @@ export const compare = (pathData1: string, pathData2: string, width: number, hei
   const img1: IImage = {width: firstImage.width, height: firstImage.height, data: Array.from(firstImageData.data), channels: 1}
   const img2: IImage = {width: secondImage.width, height: secondImage.height, data: Array.from(secondImageData.data), channels: 1}
 
-  return ImageSSIM.compare(img1, img2, width, 0.01, 0.03, false)
+  // Calculate SSIM result
+  const result = ImageSSIM.compare(img1, img2, width, 0.01, 0.03, false);
+  
+  return result;
 }
 
 const renderSVGPathToCanvas = (pathData: string, width: number, height: number): HTMLCanvasElement => {

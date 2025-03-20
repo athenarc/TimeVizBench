@@ -714,6 +714,7 @@ const Dashboard = () => {
       });
     }
   }, [queryResults, measures, selectedMethodInstances]);
+  
 
   // reset zoom in modal
   useEffect(() => {
@@ -724,6 +725,70 @@ const Dashboard = () => {
     }
   }, [selectedChart, selectedMethodInstances]);
 
+  useEffect(() => {
+    // Loop over each measure and for each selected method instance
+    measures.forEach((measure, measureIndex) => {
+      selectedMethodInstances.forEach(instanceId => {
+        // Skip the m4 reference instance itself
+        if (instanceId === `${REFERENCE_METHOD}-reference`) return;
+  
+        // Select the corresponding SVG element
+        const svg = d3.select(`#svg_${instanceId}_${measureIndex}`);
+        if (svg.empty()) {
+          console.error(`SVG not found for instance ${instanceId} and measure index ${measureIndex}`);
+          return;
+        }
+        console.log(svg);
+        // Retrieve m4 data for this measure from referenceResults
+        console.log(referenceResults)
+        const m4Data = referenceResults[measure.id]?.data[measure.id];
+        if (!m4Data) {
+          console.error(`No m4 data found for measure ${measure.id}`);
+          return;
+        }
+  
+        // Debug: log that we're processing this overlay
+        console.log(`Overlaying m4 data for ${instanceId} measure ${measure.name}`);
+  
+        // Compute x scale using the common time range
+        const x = d3
+          .scaleTime()
+          .domain([new Date(from), new Date(to)])
+          .range([margin.left + 1, Math.floor(width - margin.right)]);
+  
+        // Compute y scale based on the m4 data
+        const formattedM4 = m4Data.map(d => [new Date(d.timestamp), d.value]);
+        const m4Min = d3.min(formattedM4, (d:any) => d[1]);
+        const m4Max = d3.max(formattedM4, (d:any) => d[1]);
+        const chartHeight = Math.floor(height / measures.length);
+        const y = d3
+          .scaleLinear()
+          .domain([m4Min, m4Max])
+          .range([chartHeight - margin.bottom - 1, margin.top]);
+  
+        // Create a line generator for the m4 overlay
+        const line = d3
+          .line()
+          .x((d:any) => Math.floor(x(new Date(d.timestamp))) + 1 / window.devicePixelRatio)
+          .y((d:any) => Math.floor(y(d.value)) + 1 / window.devicePixelRatio)
+          .curve(d3.curveLinear);
+  
+        // Remove any existing m4 overlay from this SVG
+        svg.selectAll('.m4-overlay').remove();
+  
+        // Append the m4 overlay path using a light red stroke
+        svg.append('path')
+          .attr('class', 'm4-overlay')
+          .datum(m4Data)
+          .attr('fill', 'none')
+          .attr('stroke', 'lightcoral')
+          .attr('stroke-width', 1 / window.devicePixelRatio)
+          .style('shape-rendering', 'crispEdges')
+          .attr('stroke-opacity', 0.5)
+          .attr('d', line);
+      });
+    });
+  }, [referenceResults]);
 
   // render chart
   useEffect(() => {
