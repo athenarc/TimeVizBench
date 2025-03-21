@@ -32,6 +32,20 @@ import DownloadIcon from '@mui/icons-material/Download';
 import { useDispatch, useSelector } from 'react-redux';
 import { addQuery } from '../store/queryHistorySlice';
 import { RootState } from '../store/store';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import Paper from '@mui/material/Paper';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import TableViewIcon from '@mui/icons-material/TableView';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import ToggleButton from '@mui/material/ToggleButton';
+import { Resizable } from 're-resizable';
 
 import {Measure, Metadata, metadataDtoToDomain} from '../interfaces/metadata';
 import {QueryResultsDto, TimeSeriesPoint} from '../interfaces/data';
@@ -43,6 +57,13 @@ import ErrorMetrics from 'components/ErrorMetrics';
 import DataAccess from 'components/DataAccess';
 import { useMethodConfigurations } from '../components/MethodSettings';
 import { compare } from '../utils/ssim';
+import React from 'react';
+
+// Constants for the layout
+const DRAWER_WIDTH = 420;
+const MIN_LOG_HEIGHT = "30%";
+const MAX_LOG_HEIGHT = "70%";
+const DEFAULT_LOG_HEIGHT = window.innerHeight / 2; // half the window height
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -102,9 +123,10 @@ const Dashboard = () => {
   const [errorMetrics, setErrorMetrics] = useState<any[]>([]);
   const [isErrorMetricsLoading, setIsErrorMetricsLoading] = useState<boolean>(false);
   const [isErrorMetricsOutdated, setIsErrorMetricsOutdated] = useState<boolean>(false);
-  const [selectedErrorMetric, setSelectedErrorMetric] = useState<{label: string, id: string}>({id: "ssim", label:'SSIM'});
 
   const [isErrorCalculationInProgress, setIsErrorCalculationInProgress] = useState<boolean>(false);
+
+  const [currentOperationId, setCurrentOperationId] = useState<string>('');
 
   const margin = {top: 20, right: 0, bottom: 20, left: 40};
 
@@ -112,41 +134,6 @@ const Dashboard = () => {
     setMeasures([]);
     setQueryResults({});
     setResponseTimes({});
-  };
-
-  const getResponseTimeSeries = (): any[] => {
-    const series = [];
-    for (const algo of selectedMethodInstances) {
-      const res = queryResults[algo];
-      const time = responseTimes[algo];
-      if (res && time) {
-        const queryTime = (res.queryTime || 0) * 1000;
-        const renderingTime =  time.rendering;
-        const networkingTime = time.total - renderingTime - queryTime;
-        series.push({
-          dataset: formatInstanceId(algo),
-          networking: networkingTime,
-          query: queryTime,
-          rendering: renderingTime,
-        });
-      }
-    }
-    return series;
-  };
-
-  const getDataAccess = (): any[] => {
-    const series = [];
-    for (const algo of selectedMethodInstances) {
-      const res = queryResults[algo];
-      if (res) {
-        const ioCount = res.ioCount;
-        series.push({
-          dataset: formatInstanceId(algo),
-          ioCount: ioCount,
-        });
-      }
-    }
-    return series;
   };
 
   const existingInitializationParameters = (method: string): boolean => {
@@ -202,8 +189,7 @@ const Dashboard = () => {
   };
 
   // pass method also
-  const fetchData = async (instanceId: string, from: Date, to: Date, metadata: Metadata) => {
-    const [method] = instanceId.split('-');
+  const fetchData = async (instanceId: string, from: Date, to: Date, metadata: Metadata, operationId: string = currentOperationId) => {
     let fromQuery = from.getTime();
     if (fromQuery < metadata.timeRange.from) {
       fromQuery = metadata.timeRange.from;
@@ -255,7 +241,7 @@ const Dashboard = () => {
         to: dayjs(toQuery).toDate(),
         measures: measures.map(({id}) => id),
         width: chartWidth - margin.left - margin.right,
-        height: Math.floor(chartHeight / measures.length - margin.bottom - margin.top),
+        height: Math.floor(chartHeight / measures.length / selectedMethodInstances.length - margin.bottom - margin.top),
         schema: schema,
         table: table,
         params: queryParams[instanceId] || {},
@@ -286,7 +272,7 @@ const Dashboard = () => {
           `#svg_${instanceId}_${index}`,
           data,
           chartWidth,
-          Math.floor(chartHeight / measures.length),
+          Math.floor(chartHeight / measures.length / selectedMethodInstances.length),
           {from: timeRange.from, to: timeRange.to}
         );
       });
@@ -311,7 +297,8 @@ const Dashboard = () => {
           query: (queryResults.queryTime || 0) * 1000,
           networking: (renderEndTime - startTime) - (renderEndTime - renderStartTime) - ((queryResults.queryTime || 0) * 1000),
           ioCount: queryResults.ioCount || 0
-        }
+        },
+        operationId // Add the operation ID to group queries
       }));
     } catch (error) {
       console.error(error);
@@ -440,9 +427,13 @@ const Dashboard = () => {
 
   const debouncedFetchAll = useDebouncedCallback(
     async (algos: string[], from, to, metadata) => {
+      // Generate new operation ID for each pan/zoom operation
+      const newOperationId = Date.now().toString();
+      setCurrentOperationId(newOperationId);
+      
       // Loop over each method in sequence
       for (const algo of algos) {
-        await fetchData(algo, from, to, metadata);
+        await fetchData(algo, from, to, metadata, newOperationId);
       }
     },
     300
@@ -692,7 +683,7 @@ const Dashboard = () => {
     setIsReferenceFetching(true);
     try {
       const chartWidth = width - margin.left - margin.right;
-      const chartHeight = Math.floor(height / measures.length - margin.bottom - margin.top);
+      const chartHeight = Math.floor(height / measures.length / selectedMethodInstances.length - margin.bottom - margin.top);
 
       // Use the M4 instance ID for reference data
       const m4InstanceId = `${REFERENCE_METHOD}-reference`;
@@ -900,7 +891,7 @@ const Dashboard = () => {
           `#svg_${algo}_${index}`,
           data,
           width,
-          Math.floor(height / measures.length),
+          Math.floor(height / measures.length / selectedMethodInstances.length),
           {from: timeRange.from, to: timeRange.to}
         );
         totalRenderTime += renderTime;
@@ -987,6 +978,9 @@ const Dashboard = () => {
     if (!metadata || !from || !to || !measures.length) {
       return;
     }
+    // Generate a new operation ID for time range changes
+    const newOperationId = Date.now().toString();
+    setCurrentOperationId(newOperationId);
     debouncedFetchAll(selectedMethodInstances, from, to, metadata);
   }, [
     from,
@@ -1138,7 +1132,8 @@ const Dashboard = () => {
 
     // Convert queries to CSV format
     const headers = [
-      'Timestamp',
+      'Operation ID',
+      'Operation Timestamp',
       'Instance ID',
       'Method',
       'From',
@@ -1157,10 +1152,11 @@ const Dashboard = () => {
       'IO Count'
     ].join(',');
 
-    const rows = queryHistory.map(entry => {
-      const { timestamp, instanceId, query, performance } = entry;
+    const rows = queryHistory.map((entry : any) => {
+      const { operationId, timestamp, instanceId, query, performance } = entry;
       const methodConfig = query.query.methodConfig;
       const fields = [
+        operationId || 'unknown',
         new Date(timestamp).toISOString(),
         formatInstanceId(instanceId),
         methodConfig.key,
@@ -1210,424 +1206,694 @@ const Dashboard = () => {
   const MAGNIFIER_SIZE = 120;
   const ZOOM_FACTOR = 3;
 
-  return (
-    <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="relative">
-        <Toolbar variant="dense">
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            TimeVizBench
-          </Typography>
-          <IconButton
-            color="inherit"
-            onClick={handleExportResults}
-            title="Export session results"
-          >
-            <DownloadIcon />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-      <Box component="main" sx={{ pt: 2, px: 1 }}>
-        <Grid container spacing={2}>
-          <Grid size={4}>
-            <Grid container spacing={2}>
-              <Grid size={12}>
-                <Card variant="outlined">
-                  <Box 
+  // New state variables for layout control
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [logViewMode, setLogViewMode] = useState<'table' | 'chart'>('table'); 
+  const [logViewTimeframe, setLogViewTimeframe] = useState<'latest' | 'recent' | 'all'>('latest');
+  const [logHeight, setLogHeight] = useState<number>(DEFAULT_LOG_HEIGHT);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const handleLogViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: 'table' | 'chart' | null) => {
+    if (newMode !== null) {
+      setLogViewMode(newMode);
+    }
+  };
+
+  const handleLogTimeframeChange = (event: React.MouseEvent<HTMLElement>, newTimeframe: 'latest' | 'recent' | 'all' | null) => {
+    if (newTimeframe !== null) {
+      setLogViewTimeframe(newTimeframe);
+    }
+  };
+
+  // Get a filtered view of query history based on the selected timeframe
+  const getFilteredQueryHistory = () => {
+    if (!queryHistory.length) return [];
+    
+    // Group queries by operationId
+    const groupedQueries = queryHistory.reduce((acc, query) => {
+      const operationId = query.operationId || 'unknown';
+      if (!acc[operationId]) {
+        acc[operationId] = [];
+      }
+      acc[operationId].push(query);
+      return acc;
+    }, {} as Record<string, any[]>);
+    
+    // Convert to array of operation groups
+    const operationGroups = Object.entries(groupedQueries).map(([operationId, queries]) => ({
+      operationId,
+      timestamp: queries[0].timestamp, // Use timestamp of first query in group
+      queries
+    }));
+    
+    // Sort by timestamp (newest first)
+    const sortedGroups = operationGroups.sort((a, b) => b.timestamp - a.timestamp);
+    
+    if (logViewTimeframe === 'latest') {
+      return sortedGroups.slice(0, 1); // Latest operation group
+    } else if (logViewTimeframe === 'recent') {
+      return sortedGroups.slice(0, 5); // Recent 5 operation groups
+    } else {
+      return sortedGroups; // All operation groups
+    }
+  };
+
+  // Add state to track expanded rows
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  // Toggle row expansion
+  const handleRowExpand = (operationId: string) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [operationId]: !prev[operationId]
+    }));
+  };
+
+  // Render table view of logs
+  const renderLogsTable = () => {
+    const filteredHistory = getFilteredQueryHistory();
+    
+    if (!filteredHistory.length) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+          <Typography variant="body1" color="text.secondary">No query history available</Typography>
+        </Box>
+      );
+    }
+    
+    return (
+      <TableContainer component={Paper} sx={{ height: '100%', overflow: 'auto' }}>
+        <Table stickyHeader size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell width="40px"></TableCell>
+              <TableCell>Operation Time</TableCell>
+              <TableCell>Time Range</TableCell>
+              <TableCell>Measures</TableCell>
+              <TableCell>Methods</TableCell>
+              <TableCell>Total Queries</TableCell>
+              <TableCell>Total Time (ms)</TableCell>
+              <TableCell>Total IO Count</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredHistory.map((group, index) => {
+              const { operationId, timestamp, queries } = group;
+              const isExpanded = Boolean(expandedRows[operationId]) || (index === 0);
+              
+              // Use the first query to get time range and measures
+              const firstQuery = queries[0];
+              const fromDate = new Date(firstQuery.query.query.from);
+              const toDate = new Date(firstQuery.query.query.to);
+              const measures = firstQuery.query.query.measures.join(', ');
+              
+              // Get unique method names
+              const methodNames = Array.from(new Set(queries.map(q => formatInstanceId(q.instanceId)))).join(', ');
+              
+              // Calculate aggregated metrics
+              const totalTime = queries.reduce((sum, q) => sum + (q.performance?.total || 0), 0);
+              const totalIOCount = queries.reduce((sum, q) => sum + (q.performance?.ioCount || 0), 0);
+              
+              // Group queries by method instance
+              const methodGroups = queries.reduce((acc, query) => {
+                const methodId = query.instanceId;
+                const formattedId = formatInstanceId(methodId);
+                
+                if (!acc[formattedId]) {
+                  acc[formattedId] = {
+                    instanceId: methodId,
+                    displayName: formattedId,
+                    total: 0,
+                    query: 0,
+                    rendering: 0,
+                    networking: 0,
+                    ioCount: 0
+                  };
+                }
+                
+                acc[formattedId].total += query.performance?.total || 0;
+                acc[formattedId].query += query.performance?.query || 0;
+                acc[formattedId].rendering += query.performance?.rendering || 0;
+                acc[formattedId].networking += query.performance?.networking || 0;
+                acc[formattedId].ioCount += query.performance?.ioCount || 0;
+                
+                return acc;
+              }, {} as Record<string, any>);
+
+              return (
+                <React.Fragment key={operationId}>
+                  {/* Main row with aggregated data */}
+                  <TableRow 
+                    hover 
+                    onClick={() => index !== 0 && handleRowExpand(operationId)}
                     sx={{ 
-                      p: 1, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between',
-                      borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
-                      bgcolor: 'rgba(0, 0, 0, 0.03)'
+                      cursor: 'pointer',
+                      '& > *': { borderBottom: isExpanded ? 'unset' : 'inherit' },
+                      backgroundColor: isExpanded ? 'rgba(0, 0, 0, 0.04)' : 'inherit'
                     }}
-                    onClick={() => setControlPanelExpanded(!controlPanelExpanded)}
-                    style={{ cursor: 'pointer' }}
                   >
-                    <Typography variant="subtitle1" fontWeight="medium">Control Panel</Typography>
-                    <IconButton size="small">
-                      {controlPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                  </Box>
-                  <Collapse in={controlPanelExpanded}>
-                    <Box sx={{ p: 1 }}>
-                      {/* Control Panel Content */}
-                      <Grid container spacing={1}>
-                        <Grid size={12}>
-                          <Typography variant="overline">Time Range</Typography>
-                          <Grid container spacing={2} sx={{ pb: 1 }} alignItems={'center'}>
-                            <Grid size={12}>
-                              <DateTimePicker
-                                label="From"
-                                minDateTime={dayjs(minDate)}
-                                maxDateTime={dayjs(to)}
-                                disabled={loading}
-                                value={dayjs(from)}
-                                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                                onAccept={(newValue: Dayjs | null) => {
-                                  if (newValue) {
-                                    setFrom(newValue.toDate());
-                                  }
-                                }}
-                              />
-                            </Grid>
-                            <Grid size={12}>
-                              <DateTimePicker
-                                label="To"
-                                minDateTime={dayjs(from)}
-                                maxDateTime={dayjs(maxDate)}
-                                disabled={loading}
-                                value={dayjs(to)}
-                                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                                onAccept={(newValue: Dayjs | null) => {
-                                  if (newValue) {
-                                    setTo(newValue.toDate());
-                                  }
-                                }}
-                              />
-                            </Grid>
-                          </Grid>
-                        </Grid>
-                        <Grid size={12}>
-                          <Typography variant="overline">Dataset</Typography>
-                          <List component="nav" aria-label="table">
-                            <ListItemButton
-                              dense
-                              disabled={loading}
-                              selected={table === 'intel_lab_exp'}
-                              onClick={(event) => handleTableChange(event, 'intel_lab_exp')}
-                            >
-                              <ListItemText primary="intel_lab_exp" />
-                            </ListItemButton>
-                            <ListItemButton
-                              dense
-                              disabled={loading}
-                              selected={table === 'manufacturing_exp'}
-                              onClick={(event) => handleTableChange(event, 'manufacturing_exp')}
-                            >
-                              <ListItemText primary="manufacturing_exp" />
-                            </ListItemButton>
-                          </List>
-                        </Grid>
-                        <Grid size={12}>
-                          <Typography variant="overline">Method Instances</Typography>
-                          <Box display="flex" alignItems="center">
-                            <Select
-                              multiple
-                              fullWidth
-                              size="small"
-                              value={selectedMethodInstances}
-                              onChange={handleMethodInstanceChange}
-                              renderValue={(selected) => (
-                                <Box display="flex" flexWrap="wrap" gap={1}>
-                                  {(selected as string[]).map((value) => {
-                                    return (
-                                      <Chip
-                                        key={value}
-                                        label={formatInstanceId(value)}
-                                        style={{ margin: 2 }}
-                                      />
-                                    );
-                                  })}
-                                </Box>
-                              )}
-                              disabled={Object.values(methodInstances).flat().length === 0} // Disable if no instances are added
-                              MenuProps={{
-                                PaperProps: {
-                                  style: {
-                                    maxHeight: 48 * 4.5 + 8,
-                                    width: 250,
-                                  },
-                                },
-                              }}
-                            >
-                              {Object.values(methodInstances).flat().map((instance) => (
-                                <MenuItem key={instance.id} value={instance.id}>
-                                  <Box display="flex" flexDirection="column">
-                                    <Typography variant="body2">{formatInstanceId(instance.id)}</Typography>
-                                    <Typography variant="caption" color="textSecondary">
-                                      {Object.entries(instance.initParams).map(([key, value]) => (
-                                        <span key={key}>{`${key}: ${value},`}</span>
-                                      ))}
-                                    </Typography>
-                                  </Box>
-                                </MenuItem>
+                    <TableCell>
+                      {/* Render the IconButton only for rows other than the first */}
+                      {index === 0 && (
+                        <IconButton
+                          aria-label="expand row"
+                          size="small"
+                          disabled={true}
+                        >
+                          {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      )}
+                      {index !== 0 && (
+                        <IconButton
+                          aria-label="expand row"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRowExpand(operationId);
+                          }}
+                        >
+                          {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      )}
+                    </TableCell>
+                    <TableCell>{new Date(timestamp).toLocaleString()}</TableCell>
+                    <TableCell>{`${fromDate.toLocaleDateString()} ${fromDate.toLocaleTimeString()} - ${toDate.toLocaleDateString()} ${toDate.toLocaleTimeString()}`}</TableCell>
+                    <TableCell>{measures}</TableCell>
+                    <TableCell>{methodNames}</TableCell>
+                    <TableCell>{queries.length}</TableCell>
+                    <TableCell>{totalTime.toFixed(2)}</TableCell>
+                    <TableCell>{totalIOCount}</TableCell>
+                  </TableRow>
+                  
+                  {/* Expandable detail rows for each method */}
+                  <TableRow>
+                    <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <Box sx={{ margin: 2 }}>
+                          {/* <Typography variant="subtitle2" gutterBottom component="div">
+                            Method Details
+                          </Typography> */}
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Method</TableCell>
+                                <TableCell>Total Time (ms)</TableCell>
+                                <TableCell>Query Time (ms)</TableCell>
+                                <TableCell>Rendering Time (ms)</TableCell>
+                                <TableCell>Networking Time (ms)</TableCell>
+                                <TableCell>IO Count</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {Object.values(methodGroups).map((method:any) => (
+                                <TableRow key={method.instanceId}>
+                                  <TableCell component="th" scope="row">{method.displayName}</TableCell>
+                                  <TableCell>{method.total.toFixed(2)}</TableCell>
+                                  <TableCell>{method.query.toFixed(2)}</TableCell>
+                                  <TableCell>{method.rendering.toFixed(2)}</TableCell>
+                                  <TableCell>{method.networking.toFixed(2)}</TableCell>
+                                  <TableCell>{method.ioCount}</TableCell>
+                                </TableRow>
                               ))}
-                            </Select>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => setIsAddingMethod(!isAddingMethod)}
-                            >
-                              {isAddingMethod ? <RemoveIcon /> : <AddIcon />}
-                            </IconButton>
-                          </Box>
-                          {isAddingMethod && (
-                            <Box mt={2}>
-                              <Typography variant="subtitle2">Method</Typography>
-                              <Select
-                                fullWidth
-                                size="small"
-                                value={selectedMethod}
-                                onChange={handleMethodSelect}
-                                displayEmpty
-                              >
-                                <MenuItem value="" disabled>
-                                  Select Method
-                                </MenuItem>
-                                {methodConfigLoading ? (
-                                  <MenuItem value="" disabled>Loading methods...</MenuItem>
-                                ) : methodConfigError ? (
-                                  <MenuItem value="" disabled>Error loading methods</MenuItem>
-                                ) : (
-                                  Object.keys(methodConfigurations).map((method) => (
-                                    <MenuItem key={method} value={method}>
-                                      {method}
-                                    </MenuItem>
-                                  ))
-                                )}
-                              </Select>
-                              {selectedMethod && (
-                                <Box mt={2}>
-                                  {hasConfigParameters(selectedMethod) && <Typography variant="subtitle2">Initialization Parameters</Typography>}
-                                  {Object.keys(initParams).map((paramKey) => {
-                                    const paramConfig = methodConfigurations[selectedMethod]?.initParams[paramKey];
-                                    return (
-                                      <TextField
-                                        key={paramKey}
-                                        label={paramConfig?.label}
-                                        value={initParams[paramKey]}
-                                        onChange={(e) => handleParamChange(paramKey, e.target.value)}
-                                        fullWidth
-                                        size="small"
-                                        type={paramConfig?.type === "number" ? "number" : "text"}
-                                        inputProps={{
-                                          step: paramConfig?.step,
-                                          min: paramConfig?.min,
-                                          max: paramConfig?.max,
-                                        }}
-                                        sx={{ mb: 1, mt: 1 }}
-                                      />
-                                    );
-                                  })}
-                                  <Box display="flex" justifyContent="space-between">
-                                    <Button
-                                      variant="contained"
-                                      color="primary"
-                                      size="small"
-                                      onClick={handleAddInstance}
-                                    >
-                                      Save
-                                    </Button>
-                                    <Button
-                                      variant="outlined"
-                                      color="secondary"
-                                      size="small"
-                                      onClick={handleCancelAddMethod}
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </Box>
-                                </Box>
-                              )}
-                            </Box>
-                          )}
-                        </Grid>
-                        <Grid size={12}>
-                          <Typography variant="overline">Measures</Typography>
-                          <Select
-                            multiple
-                            fullWidth
-                            size="small"
-                            value={measures.map((measure) => measure.name)}
-                            onChange={handleSelectMeasures}
-                            renderValue={(selected) => (
-                              <div>
-                                {(selected as string[]).map((value) => (
-                                  <Chip key={value} label={value} style={{ margin: 2 }} />
-                                ))}
-                              </div>
-                            )}
-                          >
-                            {metadata?.measures.map((measure: Measure) => (
-                              <MenuItem key={measure.id} value={measure.name}>
-                                {measure.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </Grid>
-                        <Grid size={12}>
-                          {existingQueryParams() && <Typography variant="overline">Query Parameters</Typography>}
-                          {selectedMethodInstances.map((instanceId) => {
-                            const [method] = instanceId.split('-');
-                            const params = methodConfigurations[method]?.queryParams || {};
-                            if (Object.keys(params).length === 0) return null; // Skip if no query params
-                            return (
-                              <Box key={instanceId}>
-                                <Typography variant="subtitle2">{formatInstanceId(instanceId)}</Typography>
-                                {Object.keys(params).map((paramKey) => {
-                                  const paramConfig = params[paramKey];
-                                  return (
-                                    <TextField
-                                      key={paramKey}
-                                      label={paramConfig.label}
-                                      value={queryParams[instanceId]?.[paramKey] || paramConfig.default}
-                                      onChange={(e) => handleQueryParamChange(instanceId, paramKey, e.target.value)}
-                                      fullWidth
-                                      size="small"
-                                      type={paramConfig.type === "number" ? "number" : "text"}
-                                      inputProps={{
-                                        step: paramConfig.step,
-                                        min: paramConfig.min,
-                                        max: paramConfig.max,
-                                      }}
-                                      sx={{ mb: 1, mt: 1 }}
-                                    />
-                                  );
-                                })}
-                              </Box>
-                            );
-                          })}
-                        </Grid>
-                      </Grid>
+                            </TableBody>
+                          </Table>
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
+  // Render chart view of logs
+  const renderLogsCharts = () => {
+    const filteredHistory = getFilteredQueryHistory();
+    
+    if (!filteredHistory.length) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+          <Typography variant="body1" color="text.secondary">No query history available</Typography>
+        </Box>
+      );
+    }
+    
+    // Prepare chart data aggregated by operation groups
+    const chartData = filteredHistory.map(group => {
+      const { operationId, timestamp, queries } = group;
+      
+      // Group by method instance within each operation
+      const methodData = queries.reduce((acc, query) => {
+        const instanceId = query.instanceId;
+        const formattedId = formatInstanceId(instanceId);
+        
+        if (!acc[formattedId]) {
+          acc[formattedId] = {
+            dataset: formattedId,
+            networking: 0,
+            query: 0,
+            rendering: 0,
+            ioCount: 0
+          };
+        }
+        
+        acc[formattedId].networking += query.performance?.networking || 0;
+        acc[formattedId].query += query.performance?.query || 0;
+        acc[formattedId].rendering += query.performance?.rendering || 0;
+        acc[formattedId].ioCount += query.performance?.ioCount || 0;
+        
+        return acc;
+      }, {} as Record<string, any>);
+      
+      return {
+        operationId,
+        timestamp,
+        methods: Object.values(methodData)
+      };
+    });
+    
+    return (
+      <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
+        <Grid container spacing={2}>
+          {chartData.map((operation, index) => (
+            <Grid key={operation.operationId} container spacing={2} sx={{ mb: 2 }}>
+              <Grid size={12}>
+                <Typography variant="subtitle2">
+                  Operation at {new Date(operation.timestamp).toLocaleString()}
+                </Typography>
+              </Grid>
+              
+              {/* Performance Chart */}
+              <Grid size={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Time Breakdown (ms)
+                    </Typography>
+                    <Box sx={{ height: 250 }}>
+                      <ResponseTimes series={operation.methods} />
                     </Box>
-                  </Collapse>
+                  </CardContent>
                 </Card>
               </Grid>
-              <Grid size={12}>
-                <Card variant="outlined">
-                  <Box 
-                    sx={{ 
-                      p: 1, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between',
-                      borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
-                      bgcolor: 'rgba(0, 0, 0, 0.03)'
-                    }}
-                    onClick={() => setMetricsPanelExpanded(!metricsPanelExpanded)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <Typography variant="subtitle1" fontWeight="medium">Evaluation Metrics</Typography>
-                    <IconButton size="small">
-                      {metricsPanelExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                  </Box>
-                  <Collapse in={metricsPanelExpanded}>
-                    <Box sx={{ p: 1 }}>
-                    {!queryResults}
-                    {selectedMethodInstances.length === 0 ? (
-                          <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
-                            Select or create an instance of an method to display charts
-                          </Typography>
-                      ) : !measures.length ? (
-                            <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
-                              Select at least one measure to display
-                            </Typography>          
-                      ) :
-                       (
-                        <Grid container spacing={1}>
-                          <Grid size={12}>
-                           <Typography variant="overline">Time Breakdown</Typography>
-                            <Box>
-                              <ResponseTimes series={getResponseTimeSeries()} />
-                            </Box>
-                            <Typography variant="overline">Data Access</Typography>
-                            <Box>
-                              <DataAccess series={getDataAccess()} />
-                            </Box>
-                            {!!Object.keys(responseTimes).length && (
-                              <Grid size={12}>
-                              <Box sx={{ mt: 2 }}>
-                                <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                                  <Box display="flex" alignItems="center" gap={1}>
-                                    <Typography variant="overline">Visualization Quality</Typography>
-                                    {isErrorMetricsOutdated && errorMetrics.length > 0 && (
-                                      <Typography 
-                                        variant="caption" 
-                                        sx={{ 
-                                          color: 'warning.main',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: 0.5
-                                        }}
-                                      >
-                                        (outdated)
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                  <Button
-                                    variant="contained"
-                                    size="small"
-                                    onClick={handleCalculateErrorMetrics}
-                                    disabled={isErrorMetricsLoading}
-                                    startIcon={isErrorMetricsLoading ? <CircularProgress size={16} /> : null}
-                                    color={isErrorMetricsOutdated ? "warning" : "primary"}
-                                    sx={{ minWidth: 120 }}
-                                  >
-                                    {isErrorMetricsLoading ? 'Calculating...' : isErrorMetricsOutdated ? 'Recalculate' : 'Calculate'}
-                                  </Button>
-                                </Box>
-                            
-                                {errorMetrics.length > 0 && (
-                                  <Box sx={{ mt: 2 }}>
-                                    <ErrorMetrics 
-                                      series={errorMetrics} 
-                                      selectedMetric={selectedErrorMetric} 
-                                      selectedMethodInstances={selectedMethodInstances}
-                                      formatInstanceId={formatInstanceId} 
-                                    />
-                                  </Box>
-                                )}
-                              </Box>
-                            </Grid>                            
-                            )}
-                          </Grid>
-                        </Grid>
-                      )}
+
+              {/* Data Access Chart */}
+              <Grid size={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Data Access (IO Count)
+                    </Typography>
+                    <Box sx={{ height: 250 }}>
+                      <DataAccess series={operation.methods} />
                     </Box>
-                  </Collapse>
+                  </CardContent>
                 </Card>
               </Grid>
             </Grid>
-          </Grid>
-          <Grid size={8}>
-            {!queryResults}
-            {selectedMethodInstances.length === 0 ? (
-              <Card variant="outlined">
-                <CardContent id="chart-content">
-                  <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
-                    Select or create an instance of an method to display charts
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : !measures.length ? (
-              <Card variant="outlined">
-                <CardContent id="chart-content">
-                  <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
-                    Select at least one measure to display
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : !queryResults ? (
-              <Card variant="outlined">
-                <CardContent id="chart-content">
-                  <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
-                    {loading ? (
-                      <>
-                        <CircularProgress size={'3rem'} />
-                      </>
-                    ) : (
-                      'No data'
+          ))}
+        </Grid>
+      </Box>
+    );
+  };
+
+  return (
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', p:2 }}>
+      {/* AppBar */}
+      <AppBar 
+        position="fixed" 
+        sx={{ 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          transition: (theme) => theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+        }}
+      >
+        <Toolbar variant="dense">
+          <IconButton
+            color="inherit"
+            aria-label="toggle sidebar"
+            onClick={toggleSidebar}
+            edge="start"
+            sx={{ mr: 2 }}
+          >
+            {sidebarOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+          </IconButton>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            TimeVizBench
+          </Typography>
+         
+        </Toolbar>
+      </AppBar>
+
+      {/* Sidebar */}
+      <Box
+        component="nav"
+        sx={{
+          width: sidebarOpen ? DRAWER_WIDTH : 0,
+          flexShrink: 0,
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            width: DRAWER_WIDTH,
+            // height: 'calc(100vh - 48px)',
+            mt: '48px', // Height of AppBar
+            pr: 2,
+            overflow: 'auto',
+          }}
+        >
+          <Card variant="outlined">
+            <Box sx={{ p: 1 }}>
+              {/* Control Panel Content */}
+              <Grid container spacing={1}>
+                <Grid size={12}>
+                  <Typography variant="overline">Time Range</Typography>
+                  <Grid container spacing={2} sx={{ pb: 1 }} alignItems={'center'}>
+                    <Grid size={12}>
+                      <DateTimePicker
+                        label="From"
+                        minDateTime={dayjs(minDate)}
+                        maxDateTime={dayjs(to)}
+                        disabled={loading}
+                        value={dayjs(from)}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        onAccept={(newValue: Dayjs | null) => {
+                          if (newValue) {
+                            setFrom(newValue.toDate());
+                          }
+                        }}
+                      />
+                    </Grid>
+                    <Grid size={12}>
+                      <DateTimePicker
+                        label="To"
+                        minDateTime={dayjs(from)}
+                        maxDateTime={dayjs(maxDate)}
+                        disabled={loading}
+                        value={dayjs(to)}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        onAccept={(newValue: Dayjs | null) => {
+                          if (newValue) {
+                            setTo(newValue.toDate());
+                          }
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Grid>
+                <Grid size={12}>
+                  <Typography variant="overline">Dataset</Typography>
+                  <List component="nav" aria-label="table">
+                    <ListItemButton
+                      dense
+                      disabled={loading}
+                      selected={table === 'intel_lab_exp'}
+                      onClick={(event) => handleTableChange(event, 'intel_lab_exp')}
+                    >
+                      <ListItemText primary="intel_lab_exp" />
+                    </ListItemButton>
+                    <ListItemButton
+                      dense
+                      disabled={loading}
+                      selected={table === 'manufacturing_exp'}
+                      onClick={(event) => handleTableChange(event, 'manufacturing_exp')}
+                    >
+                      <ListItemText primary="manufacturing_exp" />
+                    </ListItemButton>
+                  </List>
+                </Grid>
+                <Grid size={12}>
+                  <Typography variant="overline">Method Instances</Typography>
+                  <Box display="flex" alignItems="center">
+                    <Select
+                      multiple
+                      fullWidth
+                      size="small"
+                      value={selectedMethodInstances}
+                      onChange={handleMethodInstanceChange}
+                      renderValue={(selected) => (
+                        <Box display="flex" flexWrap="wrap" gap={1}>
+                          {(selected as string[]).map((value) => {
+                            return (
+                              <Chip
+                                key={value}
+                                label={formatInstanceId(value)}
+                                style={{ margin: 2 }}
+                              />
+                            );
+                          })}
+                        </Box>
+                      )}
+                      disabled={Object.values(methodInstances).flat().length === 0}
+                      MenuProps={{
+                        PaperProps: {
+                          style: {
+                            maxHeight: 48 * 4.5 + 8,
+                            width: 250,
+                          },
+                        },
+                      }}
+                    >
+                      {Object.values(methodInstances).flat().map((instance) => (
+                        <MenuItem key={instance.id} value={instance.id}>
+                          <Box display="flex" flexDirection="column">
+                            <Typography variant="body2">{formatInstanceId(instance.id)}</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {Object.entries(instance.initParams).map(([key, value]) => (
+                                <span key={key}>{`${key}: ${value},`}</span>
+                              ))}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => setIsAddingMethod(!isAddingMethod)}
+                    >
+                      {isAddingMethod ? <RemoveIcon /> : <AddIcon />}
+                    </IconButton>
+                  </Box>
+                  {isAddingMethod && (
+                    <Box mt={2}>
+                      <Typography variant="subtitle2">Method</Typography>
+                      <Select
+                        fullWidth
+                        size="small"
+                        value={selectedMethod}
+                        onChange={handleMethodSelect}
+                        displayEmpty
+                      >
+                        <MenuItem value="" disabled>
+                          Select Method
+                        </MenuItem>
+                        {methodConfigLoading ? (
+                          <MenuItem value="" disabled>Loading methods...</MenuItem>
+                        ) : methodConfigError ? (
+                          <MenuItem value="" disabled>Error loading methods</MenuItem>
+                        ) : (
+                          Object.keys(methodConfigurations).map((method) => (
+                            <MenuItem key={method} value={method}>
+                              {method}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                      {selectedMethod && (
+                        <Box mt={2}>
+                          {hasConfigParameters(selectedMethod) && <Typography variant="subtitle2">Initialization Parameters</Typography>}
+                          {Object.keys(initParams).map((paramKey) => {
+                            const paramConfig = methodConfigurations[selectedMethod]?.initParams[paramKey];
+                            return (
+                              <TextField
+                                key={paramKey}
+                                label={paramConfig?.label}
+                                value={initParams[paramKey]}
+                                onChange={(e) => handleParamChange(paramKey, e.target.value)}
+                                fullWidth
+                                size="small"
+                                type={paramConfig?.type === "number" ? "number" : "text"}
+                                inputProps={{
+                                  step: paramConfig?.step,
+                                  min: paramConfig?.min,
+                                  max: paramConfig?.max,
+                                }}
+                                sx={{ mb: 1, mt: 1 }}
+                              />
+                            );
+                          })}
+                          <Box display="flex" justifyContent="space-between">
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              size="small"
+                              onClick={handleAddInstance}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="secondary"
+                              size="small"
+                              onClick={handleCancelAddMethod}
+                            >
+                              Cancel
+                            </Button>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Grid>
+                <Grid size={12}>
+                  <Typography variant="overline">Measures</Typography>
+                  <Select
+                    multiple
+                    fullWidth
+                    size="small"
+                    value={measures.map((measure) => measure.name)}
+                    onChange={handleSelectMeasures}
+                    renderValue={(selected) => (
+                      <div>
+                        {(selected as string[]).map((value) => (
+                          <Chip key={value} label={value} style={{ margin: 2 }} />
+                        ))}
+                      </div>
                     )}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : (
-              // Render measure-by-measure, and within each measure, render each method’s chart
-              measures.map((measure, measureIndex) => (
-                <Card variant="outlined" key={`measure_${measureIndex}`} sx={{ mb: 2 }}>
-                  <CardContent id="chart-content">
+                  >
+                    {metadata?.measures.map((measure: Measure) => (
+                      <MenuItem key={measure.id} value={measure.name}>
+                        {measure.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Grid>
+                <Grid size={12}>
+                  {existingQueryParams() && <Typography variant="overline">Query Parameters</Typography>}
+                  {selectedMethodInstances.map((instanceId) => {
+                    const [method] = instanceId.split('-');
+                    const params = methodConfigurations[method]?.queryParams || {};
+                    if (Object.keys(params).length === 0) return null; // Skip if no query params
+                    return (
+                      <Box key={instanceId}>
+                        <Typography variant="subtitle2">{formatInstanceId(instanceId)}</Typography>
+                        {Object.keys(params).map((paramKey) => {
+                          const paramConfig = params[paramKey];
+                          return (
+                            <TextField
+                              key={paramKey}
+                              label={paramConfig.label}
+                              value={queryParams[instanceId]?.[paramKey] || paramConfig.default}
+                              onChange={(e) => handleQueryParamChange(instanceId, paramKey, e.target.value)}
+                              fullWidth
+                              size="small"
+                              type={paramConfig.type === "number" ? "number" : "text"}
+                              inputProps={{
+                                step: paramConfig.step,
+                                min: paramConfig.min,
+                                max: paramConfig.max,
+                              }}
+                              sx={{ mb: 1, mt: 1 }}
+                            />
+                          );
+                        })}
+                      </Box>
+                    );
+                  })}
+                </Grid>
+              </Grid>
+            </Box>
+          </Card>
+        </Box>
+      </Box>
+
+      {/* Main content area */}
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          mt: '48px', // Height of AppBar
+          height: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          transition: (theme) => theme.transitions.create('margin', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+        }}
+      >
+        {/* Chart area */}
+        <Box 
+          sx={{ 
+            flexGrow: 1, 
+            overflow: 'auto',
+            display: 'flex', // Add flex display
+          }}
+        >
+          <Card variant="outlined" sx={{ height: '100%', width: '100%' }}> {/* Add width 100% */}
+            <CardContent 
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                justifyContent: !queryResults || !measures.length || selectedMethodInstances.length === 0 ? 'center' : 'flex-start', // Center when empty
+                alignItems: !queryResults || !measures.length || selectedMethodInstances.length === 0 ? 'center' : 'stretch', // Center when empty
+              }}
+            >
+          {!queryResults || !measures.length || selectedMethodInstances.length === 0 ? (
+                <Typography sx={{ color: 'text.secondary', fontSize: 14, textAlign: 'center' }}>
+                  {loading ? (
+                    <>
+                      <CircularProgress size={'3rem'} />
+                    </>
+                  ) : selectedMethodInstances.length === 0 ? (
+                    'Please select or create a method instance to display charts'
+                  ) : !measures.length ? (
+                    'Please select at least one measure to display'
+                  ) : (
+                    'No data available'
+                  )}
+                </Typography>
+          ) : (
+            // Render measure-by-measure, and within each measure, render each method's chart
+            <Box id="chart-content" sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}> {/* Add container for better layout */}
+              {measures.map((measure, measureIndex) => {
+                // Calculate height based on available space and number of measures
+                const measureHeight = `${100 / measures.length}%`;
+                
+                return (
+                <Card 
+                  variant="outlined" 
+                  key={`measure_${measureIndex}`} 
+                  sx={{ 
+                    mb: 2,
+                    height: measureHeight, // Dynamically set height based on number of measures
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <CardContent sx={{ 
+                    padding: 1, // Reduce padding to maximize chart space
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column' 
+                  }}>
                     <Box
                       display="flex"
                       flexDirection={'row'}
@@ -1657,7 +1923,7 @@ const Dashboard = () => {
                         return (
                           <Box
                             key={`chart_${instanceId}_${measureIndex}`}
-                            height={Math.floor(height / measures.length)}
+                            height={Math.floor(height / measures.length / selectedMethodInstances.length)}
                             display="flex"
                             alignItems="center"
                             justifyContent="center"
@@ -1689,7 +1955,7 @@ const Dashboard = () => {
                           <svg
                             id={`svg_${instanceId}_${measureIndex}`}
                             width={width}
-                            height={Math.floor(height / measures.length)}
+                            height={Math.floor(height / measures.length / selectedMethodInstances.length)}
                           />
                           {loadingCharts[instanceId] && (
                             <Box
@@ -1712,16 +1978,109 @@ const Dashboard = () => {
                     })}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </Grid>
-        </Grid>
+              )})}
+            </Box>
+          )}
+          </CardContent>
+         </Card>
+        </Box>
+
+        {/* Resizable logs panel */}
+        <Resizable
+          size={{ width: '100%', height: logHeight }}
+          minHeight={MIN_LOG_HEIGHT}
+          maxHeight={MAX_LOG_HEIGHT}
+          enable={{ top: true }}
+          onResizeStop={(e, direction, ref, d) => {
+            setLogHeight(logHeight + d.height);
+          }}
+          handleStyles={{
+            top: {
+              cursor: 'row-resize',
+              backgroundColor: 'rgba(0,0,0,0.05)',
+              borderTop: '1px solid rgba(0,0,0,0.1)',
+              borderRadius: '1px 1px 0 0',
+              zIndex: 10,
+            },
+          }}
+        >
+          <Card
+            variant="outlined"
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <CardContent>
+            <Box
+                  display="flex"
+                  flexDirection={'row'}
+                  flexWrap={'nowrap'}
+                  alignItems={'center'}
+                  justifyContent={'space-between'}
+                >
+                <Typography variant="subtitle1" fontWeight="medium">Query History</Typography>
+                
+                <Box display="flex" gap={2}>
+                  {/* Toggle between table and chart view */}
+                  <ToggleButtonGroup
+                    size="small"
+                    value={logViewMode}
+                    exclusive
+                    onChange={handleLogViewModeChange}
+                    aria-label="log view mode"
+                  >
+                    <ToggleButton value="table" aria-label="table view">
+                      <TableViewIcon fontSize="small" />
+                    </ToggleButton>
+                    <ToggleButton value="chart" aria-label="chart view">
+                      <BarChartIcon fontSize="small" />
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                  
+                  {/* Toggle between latest, recent, or all queries */}
+                  <ToggleButtonGroup
+                    size="small"
+                    value={logViewTimeframe}
+                    exclusive
+                    onChange={handleLogTimeframeChange}
+                    aria-label="log timeframe"
+                  >
+                    <ToggleButton value="latest" aria-label="latest query">
+                      <Typography variant="caption">Latest</Typography>
+                    </ToggleButton>
+                    <ToggleButton value="recent" aria-label="recent queries">
+                      <Typography variant="caption">Recent</Typography>
+                    </ToggleButton>
+                    <ToggleButton value="all" aria-label="all queries">
+                      <Typography variant="caption">All</Typography>
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+
+                  <IconButton
+                    color="inherit"
+                    onClick={handleExportResults}
+                    title="Export session results"
+                  >
+                    <DownloadIcon />
+                  </IconButton>
+                </Box>
+              </Box>
+            </CardContent>
+            
+            <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+              {logViewMode === 'table' ? renderLogsTable() : renderLogsCharts()}
+            </Box>
+          </Card>
+        </Resizable>
       </Box>
 
+      {/* Modal dialog for fullscreen charts */}
       <Dialog
         open={isModalOpen}
         fullWidth
-        maxWidth="xl" // Adjust as needed
+        maxWidth="xl"
         PaperProps={{
           style: { height: '90vh', overflow: 'hidden' },
         }}
@@ -1788,11 +2147,11 @@ const Dashboard = () => {
           ref={magnifierRef}
           style={{
             position: 'fixed',
-            left: magnifierPosition.x - MAGNIFIER_SIZE/2, // Center horizontally on cursor
-            top: magnifierPosition.y - MAGNIFIER_SIZE/2, // Center vertically on cursor
+            left: magnifierPosition.x - MAGNIFIER_SIZE/2,
+            top: magnifierPosition.y - MAGNIFIER_SIZE/2,
             width: MAGNIFIER_SIZE,
             height: MAGNIFIER_SIZE,
-            pointerEvents: 'none', // Don't interfere with mouse events
+            pointerEvents: 'none',
             zIndex: 9999,
             boxShadow: '0 0 10px rgba(0,0,0,0.3)',
             borderRadius: '50%',

@@ -15,6 +15,7 @@ interface QueryHistoryState {
       networking: number;
       ioCount: number;
     };
+    operationId: string;
   }[];
 }
 
@@ -26,7 +27,7 @@ export const queryHistorySlice = createSlice({
   name: 'queryHistory',
   initialState,
   reducers: {
-    addQuery: (state, action: PayloadAction<{ query: QueryDto; instanceId: string; results?: any; performance: any }>) => {
+    addQuery: (state, action: PayloadAction<{ query: QueryDto; instanceId: string; results?: any; performance: any; operationId: string }>) => {
       state.queries.push({
         ...action.payload,
         query: action.payload.query,
