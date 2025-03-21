@@ -16,9 +16,9 @@
     git clone https://github.com/athenarc/TimeVizBench.git
     ```
 2. Navigate into the repository:
- bash
- cd TimeVizBench
- 
+     ```bash
+     cd TimeVizBench
+    ``` 
 
 ---
 
