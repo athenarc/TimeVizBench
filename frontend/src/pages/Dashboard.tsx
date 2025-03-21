@@ -464,6 +464,13 @@ const Dashboard = () => {
 
     const chartPlane = svg.append('g');
 
+    // Extract the instanceId and measureIndex from the selector
+    const selectorParts = selector.split('_');
+    const instanceId = selectorParts[1];
+    const measureIndexStr = selectorParts[2].split('-')[0];
+    const measureIndex = parseInt(measureIndexStr);
+    const isModal = selector.includes('-modal');
+
     // Convert x to Date from timestamp
     const formattedData = data.map((d: any) => [new Date(d.timestamp), d.value] as [Date, number]);
 
@@ -532,7 +539,7 @@ const Dashboard = () => {
     svg.selectAll('.grid path').style('stroke-width', 0);
 
     // X Axis
-    const xAxis = chartPlane
+    chartPlane
       .append('g')
       .attr('transform', `translate(0, ${height - margin.bottom})`)
       .call(d3.axisBottom(x).ticks(7).tickFormat(d3.timeFormat(getTickFormat())));
@@ -560,6 +567,23 @@ const Dashboard = () => {
       .style('shape-rendering', 'crispEdges')
       .attr('d', line);
 
+    // Add invisible overlay for magnifier trigger area
+    svg.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', 'transparent')
+      .on('mousemove', function(event:any) {
+        setMagnifierPosition({x: event.pageX, y: event.pageY});
+        setMagnifierContent({
+          instanceId,
+          measureIndex,
+          isModal
+        });
+        setMagnifierVisible(true);
+      })
+      .on('mouseleave', function() {
+        setMagnifierVisible(false);
+      });
 
     const zoom = d3
       .zoom()
@@ -591,6 +615,69 @@ const Dashboard = () => {
     const renderEndTime = performance.now();
     const renderTime = renderEndTime - renderStartTime;
     return renderTime;
+  };
+
+  // Function to render the magnified chart content
+  const renderMagnifiedContent = () => {
+    if (!magnifierContent || !magnifierVisible) return null;
+    
+    const { instanceId, measureIndex, isModal } = magnifierContent;
+    
+    // Get the SVG selector
+    const svgSelector = isModal 
+      ? `#svg_${instanceId}_${measures[measureIndex].id}-modal`
+      : `#svg_${instanceId}_${measureIndex}`;
+    
+    const svgElement = document.querySelector(svgSelector);
+    if (!svgElement) return null;
+    
+    const svgRect = svgElement.getBoundingClientRect();
+    
+    // Calculate mouse position relative to the SVG
+    const relativeX = magnifierPosition.x - svgRect.left;
+    const relativeY = magnifierPosition.y - svgRect.top;
+    
+    // Create a clipping group that will show only part of the chart
+    return (
+      <svg width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} viewBox={`0 0 ${MAGNIFIER_SIZE} ${MAGNIFIER_SIZE}`}>
+        <defs>
+          <clipPath id="magnifierClip">
+            <circle cx={MAGNIFIER_SIZE/2} cy={MAGNIFIER_SIZE/2} r={MAGNIFIER_SIZE/2 - 1} />
+          </clipPath>
+        </defs>
+        
+        {/* Use a group with the clip path and translation for proper centering */}
+        <g clipPath="url(#magnifierClip)">
+          {/* Create a translated and scaled clone of the SVG content */}
+          <g 
+            transform={`translate(${MAGNIFIER_SIZE/2 - relativeX * ZOOM_FACTOR}, ${MAGNIFIER_SIZE/2 - relativeY * ZOOM_FACTOR}) scale(${ZOOM_FACTOR})`}
+            dangerouslySetInnerHTML={{ 
+              __html: svgElement.innerHTML 
+            }}
+          />
+        </g>
+        
+        {/* Add crosshair in the center */}
+        <line 
+          x1={MAGNIFIER_SIZE/2} 
+          y1="0" 
+          x2={MAGNIFIER_SIZE/2} 
+          y2={MAGNIFIER_SIZE} 
+          stroke="red" 
+          strokeWidth="1" 
+          strokeDasharray="2,2"
+        />
+        <line 
+          x1="0" 
+          y1={MAGNIFIER_SIZE/2} 
+          x2={MAGNIFIER_SIZE} 
+          y2={MAGNIFIER_SIZE/2} 
+          stroke="red" 
+          strokeWidth="1" 
+          strokeDasharray="2,2"
+        />
+      </svg>
+    );
   };
 
   const fetchReferenceData = async () => {
@@ -738,14 +825,16 @@ const Dashboard = () => {
           console.error(`SVG not found for instance ${instanceId} and measure index ${measureIndex}`);
           return;
         }
-        console.log(svg);
+
         // Retrieve m4 data for this measure from referenceResults
-        console.log(referenceResults)
         const m4Data = referenceResults[measure.id]?.data[measure.id];
+        const timeRange = referenceResults[measure.id]?.timeRange;
         if (!m4Data) {
           console.error(`No m4 data found for measure ${measure.id}`);
           return;
         }
+        const minTs = new Date(timeRange.from);
+        const maxTs = new Date(timeRange.to);
   
         // Debug: log that we're processing this overlay
         console.log(`Overlaying m4 data for ${instanceId} measure ${measure.name}`);
@@ -753,7 +842,7 @@ const Dashboard = () => {
         // Compute x scale using the common time range
         const x = d3
           .scaleTime()
-          .domain([new Date(from), new Date(to)])
+          .domain([minTs, maxTs])
           .range([margin.left + 1, Math.floor(width - margin.right)]);
   
         // Compute y scale based on the m4 data
@@ -761,6 +850,7 @@ const Dashboard = () => {
         const m4Min = d3.min(formattedM4, (d:any) => d[1]);
         const m4Max = d3.max(formattedM4, (d:any) => d[1]);
         const chartHeight = Math.floor(height / measures.length);
+
         const y = d3
           .scaleLinear()
           .domain([m4Min, m4Max])
@@ -784,7 +874,7 @@ const Dashboard = () => {
           .attr('stroke', 'lightcoral')
           .attr('stroke-width', 1 / window.devicePixelRatio)
           .style('shape-rendering', 'crispEdges')
-          .attr('stroke-opacity', 0.5)
+          .attr('stroke-opacity', 0.8)
           .attr('d', line);
       });
     });
@@ -1106,6 +1196,20 @@ const Dashboard = () => {
     document.body.removeChild(link);
   };
 
+  // Add state for magnifying lens
+  const [magnifierVisible, setMagnifierVisible] = useState<boolean>(false);
+  const [magnifierPosition, setMagnifierPosition] = useState<{x: number, y: number}>({x: 0, y: 0});
+  const [magnifierContent, setMagnifierContent] = useState<{
+    instanceId: string,
+    measureIndex: number,
+    isModal: boolean
+  } | null>(null);
+  const magnifierRef = useRef<HTMLDivElement>(null);
+  
+  // Constants for magnifier
+  const MAGNIFIER_SIZE = 120;
+  const ZOOM_FACTOR = 3;
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       <AppBar position="relative">
@@ -1150,7 +1254,7 @@ const Dashboard = () => {
                       {/* Control Panel Content */}
                       <Grid container spacing={1}>
                         <Grid size={12}>
-                          <Typography variant="overline">Parameters</Typography>
+                          <Typography variant="overline">Time Range</Typography>
                           <Grid container spacing={2} sx={{ pb: 1 }} alignItems={'center'}>
                             <Grid size={12}>
                               <DateTimePicker
@@ -1677,6 +1781,28 @@ const Dashboard = () => {
           </Box>
         </Box>
       </Dialog>
+
+      {/* Magnifying lens element */}
+      {magnifierVisible && (
+        <div 
+          ref={magnifierRef}
+          style={{
+            position: 'fixed',
+            left: magnifierPosition.x - MAGNIFIER_SIZE/2, // Center horizontally on cursor
+            top: magnifierPosition.y - MAGNIFIER_SIZE/2, // Center vertically on cursor
+            width: MAGNIFIER_SIZE,
+            height: MAGNIFIER_SIZE,
+            pointerEvents: 'none', // Don't interfere with mouse events
+            zIndex: 9999,
+            boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            border: '2px solid white',
+          }}
+        >
+          {renderMagnifiedContent()}
+        </div>
+      )}
     </Box>
   );
 };

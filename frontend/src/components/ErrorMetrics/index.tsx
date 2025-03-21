@@ -19,10 +19,10 @@ const ErrorMetrics = ({
   formatInstanceId 
 }: ErrorMetricsProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 500, height: 130 });
+  const [dimensions, setDimensions] = useState({ width: 500, height: 120 });
 
   useEffect(() => { 
-    setDimensions({ width: dimensions.width, height: 60 * series.length + 70 });
+    setDimensions({ width: dimensions.width, height: 60 * series.length + 50 });
   },[series]);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const ErrorMetrics = ({
       if (containerRef.current) {
         setDimensions({
           width: containerRef.current.offsetWidth,
-          height: 60 * series.length + 70,
+          height: 60 * series.length + 50,
         });
       }
     };
@@ -68,7 +68,7 @@ const ErrorMetrics = ({
           dataset={series}
           series={legendItems}
           yAxis={[{ scaleType: 'band', dataKey: 'measure' }]}
-          xAxis={[{ label: selectedMetric.label }]}
+          xAxis={[{ label: selectedMetric.label, max: 1 }]}
           width={dimensions.width}
           height={dimensions.height}
           skipAnimation
