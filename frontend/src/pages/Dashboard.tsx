@@ -60,10 +60,12 @@ import { compare } from '../utils/ssim';
 import React from 'react';
 
 // Constants for the layout
+const DEFAULT_CHART_PADDING = 5;
 const DRAWER_WIDTH = 420;
-const MIN_LOG_HEIGHT = "30%";
-const MAX_LOG_HEIGHT = "70%";
-const DEFAULT_LOG_HEIGHT = window.innerHeight / 2; // half the window height
+const MIN_LOG_HEIGHT = "20%"; // Reduced minimum height
+const MAX_LOG_HEIGHT = "60%"; // Reduced maximum height
+const DEFAULT_LOG_HEIGHT = window.innerHeight * 0.3; // 30% of the window height
+const PADDING_BETWEEN_SECTIONS = 8; // Padding between main sections
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -78,6 +80,8 @@ const Dashboard = () => {
 
   const [from, setFrom] = useState<Date>(dayjs(1330144930991).toDate());
   const [to, setTo] = useState<Date>(dayjs(1330244930991).toDate());
+
+  // default width, height will be reset once page is loaded
   const [height, setHeight] = useState<number>(300);
   const [width, setWidth] = useState<number>(0);
   const [modalHeight, setModalHeight] = useState<number>(400);
@@ -890,7 +894,7 @@ const Dashboard = () => {
         const renderTime = renderChart(
           `#svg_${algo}_${index}`,
           data,
-          width,
+          width - (DEFAULT_CHART_PADDING * 2), // minus 10 pixels for padding = 5px
           Math.floor(height / measures.length / selectedMethodInstances.length),
           {from: timeRange.from, to: timeRange.to}
         );
@@ -1525,7 +1529,14 @@ const Dashboard = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', p:2 }}>
+    <Box sx={{ 
+      display: 'flex', 
+      mt:'48px', 
+      overflow: 'hidden', 
+      p: 2, 
+      height: 'calc(100vh - 48px - 16px)', // Full height minus AppBar and padding
+      boxSizing: 'border-box'
+    }}>
       {/* AppBar */}
       <AppBar 
         position="fixed" 
@@ -1570,14 +1581,23 @@ const Dashboard = () => {
         <Box
           sx={{
             width: DRAWER_WIDTH,
-            // height: 'calc(100vh - 48px)',
-            mt: '48px', // Height of AppBar
+            height: '100%',  // Set to full available height
             pr: 2,
             overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          <Card variant="outlined">
-            <Box sx={{ p: 1 }}>
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              flexGrow: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%', // Make sure the card takes full height
+            }}
+          >
+            <Box sx={{ p: 1, flexGrow: 1, overflow: 'auto' }}>
               {/* Control Panel Content */}
               <Grid container spacing={1}>
                 <Grid size={12}>
@@ -1827,8 +1847,7 @@ const Dashboard = () => {
         component="main" 
         sx={{ 
           flexGrow: 1, 
-          mt: '48px', // Height of AppBar
-          height: 'calc(100vh - 48px)',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1843,7 +1862,8 @@ const Dashboard = () => {
           sx={{ 
             flexGrow: 1, 
             overflow: 'auto',
-            display: 'flex', // Add flex display
+            display: 'flex',
+            mb: `${PADDING_BETWEEN_SECTIONS}px`, // Add padding between sections
           }}
         >
           <Card variant="outlined" sx={{ height: '100%', width: '100%' }}> {/* Add width 100% */}
@@ -1876,108 +1896,110 @@ const Dashboard = () => {
               {measures.map((measure, measureIndex) => {
                 // Calculate height based on available space and number of measures
                 const measureHeight = `${100 / measures.length}%`;
-                
                 return (
-                <Card 
-                  variant="outlined" 
-                  key={`measure_${measureIndex}`} 
-                  sx={{ 
-                    mb: 2,
-                    height: measureHeight, // Dynamically set height based on number of measures
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <CardContent sx={{ 
-                    padding: 1, // Reduce padding to maximize chart space
-                    flex: 1, 
-                    display: 'flex', 
-                    flexDirection: 'column' 
-                  }}>
-                    <Box
-                      display="flex"
-                      flexDirection={'row'}
-                      flexWrap={'nowrap'}
-                      alignItems={'center'}
-                      justifyContent={'space-between'}
-                    >
-                      <Typography variant="body1" sx={{ color: 'text.secondary', fontSize: 14 }}>
+                  <>
+                    <Typography variant="body1" sx={{ color: 'text.secondary', fontSize: 14, mt: 1 }}>
                         {measure.name}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSelectedChart(measure.id);
-                          setIsModalOpen(true);
-                        }}
-                      >
-                        <OpenInFullIcon fontSize={'small'} />
-                      </IconButton>
-                    </Box>
-
-                    {/* For each selected method instance, display a sub-chart for this measure */}
-                    {selectedMethodInstances.map((instanceId) => {
-                      const algoResult = queryResults[instanceId];
-                      // If there's no data yet for that method, just show a loader or placeholder
-                      if (!algoResult) {
-                        return (
-                          <Box
-                            key={`chart_${instanceId}_${measureIndex}`}
-                            height={Math.floor(height / measures.length / selectedMethodInstances.length)}
-                            display="flex"
-                            alignItems="center"
-                            justifyContent="center"
-                            position="relative"
+                    </Typography>
+                    <Card 
+                      variant="outlined" 
+                      key={`measure_${measureIndex}`} 
+                      sx={{ 
+                        height: measureHeight, // Dynamically set height based on number of measures
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
+                    >
+                      <CardContent sx={{ 
+                        paddingLeft: DEFAULT_CHART_PADDING + 'px', 
+                        paddingRight: DEFAULT_CHART_PADDING + 'px', 
+                        flex: 1, 
+                        display: 'flex', 
+                        flexDirection: 'column'
+                      }}>
+                        <Box
+                          display="flex"
+                          flexDirection={'row'}
+                          flexWrap={'nowrap'}
+                          alignItems={'center'}
+                          justifyContent={'right'}
+                        >
+                        
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedChart(measure.id);
+                              setIsModalOpen(true);
+                            }}
                           >
-                            {loadingCharts[instanceId] ? (
-                              <CircularProgress size={'3rem'} />
-                            ) : (
-                              <Typography
-                                sx={{
-                                  color: 'text.secondary',
-                                  fontSize: 14,
-                                  textAlign: 'center',
-                                }}
-                              >
-                                No data for {formatInstanceId(instanceId)}
-                              </Typography>
-                            )}
-                          </Box>
-                        );
-                      }
-                      return (
-                        <Box key={`chart_${instanceId}_${measureIndex}`} position="relative">
-                          {/* Method label */}
-                          <Typography variant="caption" sx={{ ml: 2 }}>
-                            {formatInstanceId(instanceId)}
-                          </Typography>
-                          {/* The actual chart */}
-                          <svg
-                            id={`svg_${instanceId}_${measureIndex}`}
-                            width={width}
-                            height={Math.floor(height / measures.length / selectedMethodInstances.length)}
-                          />
-                          {loadingCharts[instanceId] && (
-                            <Box
-                              position="absolute"
-                              top={0}
-                              left={0}
-                              width="100%"
-                              height="100%"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                              bgcolor="rgba(255, 255, 255, 0.7)"
-                              zIndex={1}
-                            >
-                              <CircularProgress size={'3rem'} />
-                            </Box>
-                          )}
+                            <OpenInFullIcon fontSize={'small'} />
+                          </IconButton>
                         </Box>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
+
+                        {/* For each selected method instance, display a sub-chart for this measure */}
+                        {selectedMethodInstances.map((instanceId) => {
+                          const algoResult = queryResults[instanceId];
+                          // If there's no data yet for that method, just show a loader or placeholder
+                          if (!algoResult) {
+                            return (
+                              <Box
+                                key={`chart_${instanceId}_${measureIndex}`}
+                                height={Math.floor(height / measures.length / selectedMethodInstances.length)}
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                                position="relative"
+                              >
+                                {loadingCharts[instanceId] ? (
+                                  <CircularProgress size={'3rem'} />
+                                ) : (
+                                  <Typography
+                                    sx={{
+                                      color: 'text.secondary',
+                                      fontSize: 14,
+                                      textAlign: 'center',
+                                    }}
+                                  >
+                                    No data for {formatInstanceId(instanceId)}
+                                  </Typography>
+                                )}
+                              </Box>
+                            );
+                          }
+                          return (
+                            <Box key={`chart_${instanceId}_${measureIndex}`} position="relative">
+                              {/* Method label */}
+                              <Typography variant="caption" sx={{ ml: 2 }}>
+                                {formatInstanceId(instanceId)}
+                              </Typography>
+                              {/* The actual chart */}
+                              <svg
+                                id={`svg_${instanceId}_${measureIndex}`}
+                                width={width}
+                                height={Math.floor(height / measures.length / selectedMethodInstances.length)}
+                              />
+                              {loadingCharts[instanceId] && (
+                                <Box
+                                  position="absolute"
+                                  top={0}
+                                  left={0}
+                                  width="100%"
+                                  height="100%"
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="center"
+                                  bgcolor="rgba(255, 255, 255, 0.7)"
+                                  zIndex={1}
+                                >
+                                  <CircularProgress size={'3rem'} />
+                                </Box>
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  </>
               )})}
             </Box>
           )}
@@ -2000,6 +2022,7 @@ const Dashboard = () => {
               backgroundColor: 'rgba(0,0,0,0.05)',
               borderTop: '1px solid rgba(0,0,0,0.1)',
               borderRadius: '1px 1px 0 0',
+              height: '8px', // Make handle easier to grab
               zIndex: 10,
             },
           }}
@@ -2007,19 +2030,20 @@ const Dashboard = () => {
           <Card
             variant="outlined"
             sx={{
-              height: '100%',
+              height: "100%", // Use 100% of the available space
               display: 'flex',
               flexDirection: 'column',
+              boxSizing: 'border-box',
             }}
           >
-            <CardContent>
-            <Box
-                  display="flex"
-                  flexDirection={'row'}
-                  flexWrap={'nowrap'}
-                  alignItems={'center'}
-                  justifyContent={'space-between'}
-                >
+            <CardContent sx={{ p: 2, pb: 1 }}> {/* Reduce bottom padding */}
+              <Box
+                display="flex"
+                flexDirection={'row'}
+                flexWrap={'nowrap'}
+                alignItems={'center'}
+                justifyContent={'space-between'}
+              >
                 <Typography variant="subtitle1" fontWeight="medium">Query History</Typography>
                 
                 <Box display="flex" gap={2}>
@@ -2069,7 +2093,7 @@ const Dashboard = () => {
               </Box>
             </CardContent>
             
-            <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+            <Box sx={{ flexGrow: 1, overflow: 'hidden', px: 2, pb: 2 }}> {/* Add horizontal padding */}
               {logViewMode === 'table' ? renderLogsTable() : renderLogsCharts()}
             </Box>
           </Card>
