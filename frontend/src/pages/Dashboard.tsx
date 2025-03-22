@@ -21,9 +21,6 @@ import AddIcon from '@mui/icons-material/Add';
 import CardContent from '@mui/material/CardContent';
 import {useDebouncedCallback} from 'use-debounce';
 import Toolbar from '@mui/material/Toolbar';
-import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import CloseIcon from '@mui/icons-material/Close';
-import Dialog from '@mui/material/Dialog';
 import CircularProgress from '@mui/material/CircularProgress';
 import Collapse from '@mui/material/Collapse';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -89,9 +86,7 @@ const Dashboard = () => {
   // default width, height will be reset once page is loaded
   const [height, setHeight] = useState<number>(300);
   const [width, setWidth] = useState<number>(0);
-  const [modalHeight, setModalHeight] = useState<number>(400);
-  const [modalWidth, setModalWidth] = useState<number>(0);
-
+  
   const [minDate, setMinDate] = useState<Date | null>(null);
   const [maxDate, setMaxDate] = useState<Date | null>(null);
 
@@ -117,7 +112,6 @@ const Dashboard = () => {
   // multiple results by method
   const [queryResults, setQueryResults] = useState<Record<string, QueryResultsDto | undefined>>({});
 
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [selectedChart, setSelectedChart] = useState<number | null>(null);
 
   // multiple response times by algoirthm
@@ -191,7 +185,6 @@ const Dashboard = () => {
     }
   };
 
-  // pass method also
   const fetchData = async (instanceId: string, from: Date, to: Date, metadata: Metadata, operationId: string = currentOperationId) => {
     let fromQuery = from.getTime();
     if (fromQuery < metadata.timeRange.from) {
@@ -214,22 +207,9 @@ const Dashboard = () => {
     setLoading(true);
     setLoadingCharts((prev) => ({ ...prev, [instanceId]: true }));
 
-    let chartWidth = width;
+    const chartWidth = Math.floor(d3.select('#chart-content').node().getBoundingClientRect().width);
+    setWidth(chartWidth);
     let chartHeight = height;
-
-    if (isModalOpen) {
-      chartWidth = Math.floor(
-        d3.select('#chart-content-modal').node().getBoundingClientRect().width
-      );
-      chartHeight = Math.floor(
-        d3.select('#chart-content-modal').node().getBoundingClientRect().height
-      );
-      setModalWidth(chartWidth);
-      setModalHeight(chartHeight);
-    } else {
-      chartWidth = Math.floor(d3.select('#chart-content').node().getBoundingClientRect().width);
-      setWidth(chartWidth);
-    }
 
     const instance = Object.values(methodInstances).flat().find((inst) => inst.id === instanceId);
     const initParams = instance?.initParams || {};
@@ -294,10 +274,6 @@ const Dashboard = () => {
         },
         operationId // Add the operation ID to group queries
       }));
-
-      if(showQualityMetrics){
-        await fetchReferenceData();
-      }
 
     } catch (error) {
       console.error(error);
@@ -437,6 +413,414 @@ const Dashboard = () => {
     300
   );
 
+
+  // Function to render the magnified chart content
+  const renderMagnifiedContent = () => {
+    if (!magnifierContent || !magnifierVisible) return null;
+    
+    const { instanceId, measureIndex } = magnifierContent;
+    
+    // Get the SVG selector
+    const svgSelector = `#svg_${instanceId}_${measureIndex}`;
+
+    
+    const svgElement = document.querySelector(svgSelector);
+    if (!svgElement) return null;
+    
+    const svgRect = svgElement.getBoundingClientRect();
+    
+    // Calculate mouse position relative to the SVG
+    const relativeX = magnifierPosition.x - svgRect.left;
+    const relativeY = magnifierPosition.y - svgRect.top;
+    
+    // Create a clipping group that will show only part of the chart
+    return (
+      <svg width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} viewBox={`0 0 ${MAGNIFIER_SIZE} ${MAGNIFIER_SIZE}`}>
+        <defs>
+          <clipPath id="magnifierClip">
+            <circle cx={MAGNIFIER_SIZE/2} cy={MAGNIFIER_SIZE/2} r={MAGNIFIER_SIZE/2 - 1} />
+          </clipPath>
+        </defs>
+        
+        {/* Use a group with the clip path and translation for proper centering */}
+        <g clipPath="url(#magnifierClip)">
+          {/* Create a translated and scaled clone of the SVG content */}
+          <g 
+            transform={`translate(${MAGNIFIER_SIZE/2 - relativeX * ZOOM_FACTOR}, ${MAGNIFIER_SIZE/2 - relativeY * ZOOM_FACTOR}) scale(${ZOOM_FACTOR})`}
+            dangerouslySetInnerHTML={{ 
+              __html: svgElement.innerHTML 
+            }}
+          />
+        </g>
+        
+        {/* Add crosshair in the center */}
+        <line 
+          x1={MAGNIFIER_SIZE/2} 
+          y1="0" 
+          x2={MAGNIFIER_SIZE/2} 
+          y2={MAGNIFIER_SIZE} 
+          stroke="red" 
+          strokeWidth="1" 
+          strokeDasharray="2,2"
+        />
+        <line 
+          x1="0" 
+          y1={MAGNIFIER_SIZE/2} 
+          x2={MAGNIFIER_SIZE} 
+          y2={MAGNIFIER_SIZE/2} 
+          stroke="red" 
+          strokeWidth="1" 
+          strokeDasharray="2,2"
+        />
+      </svg>
+    );
+  };
+
+  // New function to calculate SSIM values for all charts
+  const calculateAllSSIMValues = async (refResults: Record<number, QueryResultsDto> = referenceResults) => {
+    if (Object.keys(refResults).length === 0) {
+      console.log("No reference results available");
+      return;
+    }
+
+    setIsCalculatingSSIM(true);
+    
+    try {
+      const newSSIMValues: Record<string, Record<number, number>> = {};
+      
+      // For each method instance
+      for (const instanceId of selectedMethodInstances) {
+        // Skip the reference method itself
+        if (instanceId === `${REFERENCE_METHOD}-reference`) continue;
+        
+        newSSIMValues[instanceId] = {};
+        const methodResults = queryResults[instanceId];
+        
+        if (!methodResults) continue;
+        
+        // For each measure
+        measures.forEach((measure, index) => {
+          const referenceResult = refResults[measure.id];
+          
+          if (methodResults && referenceResult) {
+            const ssimValue = calculateSSIM(
+              methodResults.data[measure.id],
+              referenceResult.data[measure.id],
+              width,
+              height / measures.length,
+              instanceId
+            );
+            console.log(ssimValue);
+            newSSIMValues[instanceId][index] = ssimValue;
+          }
+        });
+      }
+      
+      setSSIMValues(newSSIMValues);
+    } finally {
+      setIsCalculatingSSIM(false);
+    }
+  };
+
+  // Function to toggle SSIM calculation
+  const handleToggleQualityMetrics = () => {
+    const newValue = !showQualityMetrics;
+    setShowQualityMetrics(newValue);
+    
+    if (newValue && Object.keys(referenceResults).length === 0) {
+      // If enabling and we don't have reference data yet, fetch it
+      fetchReferenceData();
+    }
+  };
+
+  // New function to toggle magnifier overlay on existing charts
+  const toggleMagnifierOverlay = (enabled: boolean) => {
+    // For all SVGs with the chart-svg class
+    d3.selectAll('.chart-svg').each(function(this: SVGSVGElement) {
+      const svg = d3.select(this);
+      const svgNode = svg.node() as SVGSVGElement;
+      if (!svgNode) return;
+      // Get selector to extract chart metadata
+      const id = svgNode.id;
+      if (!id) return;
+  
+      const selectorParts = id.split('_');
+      if (selectorParts.length < 3) return;
+      
+      const instanceId = selectorParts[1];
+      const measureIndexStr = selectorParts[2].split('-')[0];
+      const measureIndex = parseInt(measureIndexStr);
+      
+      // Remove any existing magnifier overlay
+      svg.selectAll('.magnifier-overlay').remove();
+  
+      // Add new overlay if enabled
+      if (enabled) {
+        svg.append('rect')
+          .attr('class', 'magnifier-overlay')
+          .attr('width', svgNode.width.baseVal.value)
+          .attr('height', svgNode.height.baseVal.value)
+          .attr('fill', 'transparent')
+          .on('mousemove', function(event:any) {
+            setMagnifierPosition({x: event.pageX, y: event.pageY});
+            setMagnifierContent({
+              instanceId,
+              measureIndex
+            });
+            setMagnifierVisible(true);
+          })
+          .on('mouseleave', function() {
+            setMagnifierVisible(false);
+          });
+      }
+    });
+  };
+
+  useEffect(()=> {
+    if (showQualityMetrics) {
+      fetchReferenceData();
+    }
+    else {
+      setReferenceResults({});
+      setSSIMValues({});
+    }
+  },[showQualityMetrics])
+
+
+  const [selectedMethodInstances, setSelectedMethodInstances] = useState<string[]>([]);
+  const [loadingCharts, setLoadingCharts] = useState<Record<string, boolean>>({});
+
+  const formatInstanceId = (instanceId: string) => {
+    const [method, timestamp] = instanceId.split('-');
+  
+    if (!hasConfigParameters(method)) {
+      return method;
+    }
+  
+    const instances = methodInstances[method] || [];
+    if (instances.length === 1) {
+      return method;
+    }
+  
+    const instanceNumber = instances.findIndex(inst => inst.id === instanceId) + 1;
+    return `${method}-${instanceNumber}`;
+  };
+
+  const handleMethodInstanceChange = (event: SelectChangeEvent<string[]>) => {
+    const {
+      target: { value },
+    } = event;
+    const newSelected = typeof value === 'string' ? value.split(',') : value;
+    setSelectedMethodInstances(newSelected);
+    
+    // Clear results for deselected instances
+    setQueryResults(prev => {
+      const newResults = {...prev};
+      Object.keys(newResults).forEach(key => {
+        if (!newSelected.includes(key)) {
+          delete newResults[key];
+        }
+      });
+      return newResults;
+    });
+    
+    setResponseTimes(prev => {
+      const newTimes = {...prev};
+      Object.keys(newTimes).forEach(key => {
+        if (!newSelected.includes(key)) {
+          delete newTimes[key];
+        }
+      });
+      return newTimes;
+    });
+  };
+
+  // reset zoom
+  useEffect(() => {
+    if (!measures.length) return;
+    for (const algo of selectedMethodInstances) {
+      const res = queryResults[algo];
+      if (!res) continue;
+      const series = Object.values(res.data);
+      series.forEach((_, index) => {
+        const svg = d3.select(`#svg_${algo}_${index}`);
+        svg.call(d3.zoom().transform, d3.zoomIdentity);
+      });
+    }
+  }, [queryResults, measures, selectedMethodInstances]);
+  
+  // render ref data
+  useEffect(() => {
+    // Loop over each measure and for each selected method instance
+    if (!showQualityMetrics || Object.keys(referenceResults).length === 0) {
+      return; // Exit early if quality metrics are disabled or no reference data
+    }
+    
+    measures.forEach((measure, measureIndex) => {
+      selectedMethodInstances.forEach(instanceId => {
+        // Skip the m4 reference instance itself
+        if (instanceId === `${REFERENCE_METHOD}-reference`) return;
+  
+        // Select the corresponding SVG element
+        const svg = d3.select(`#svg_${instanceId}_${measureIndex}`);
+        
+        if (svg.empty()) {
+          console.error(`SVG not found for instance ${instanceId} and measure index ${measureIndex}`);
+          return;
+        }
+        
+        // Remove any existing m4 overlay from this SVG
+        svg.selectAll('.m4-overlay').remove();
+        
+        // Get measure ID and corresponding reference data
+        const measureId = measure.id;
+        const m4Data = referenceResults[measureId]?.data[measureId];
+        const timeRange = referenceResults[measureId]?.timeRange;
+        
+        if (!m4Data || !timeRange) {
+          console.log(`No reference data found for measure ${measureId}`);
+          return;
+        }
+        
+        const minTs = new Date(timeRange.from);
+        const maxTs = new Date(timeRange.to);
+
+        const chartWidth = width - (DEFAULT_CHART_PADDING * 2);
+        const chartHeight = Math.floor(height / measures.length / selectedMethodInstances.length);
+
+        // Compute x scale using the common time range
+        const x = d3
+          .scaleTime()
+          .domain([minTs, maxTs])
+          .range([margin.left + 1, Math.floor(chartWidth - margin.right)]);
+  
+        // Compute y scale based on the m4 data
+        const formattedM4 = m4Data.map(d => [new Date(d.timestamp), d.value]);
+        const m4Min = d3.min(formattedM4, (d:any) => d[1]);
+        const m4Max = d3.max(formattedM4, (d:any) => d[1]);
+
+        const y = d3
+          .scaleLinear()
+          .domain([m4Min, m4Max])
+          .range([chartHeight - margin.bottom - 1, margin.top]);
+  
+        // Create a line generator for the m4 overlay
+        const line = d3
+          .line()
+          .x((d:any) => Math.floor(x(new Date(d.timestamp))) + 1 / window.devicePixelRatio)
+          .y((d:any) => Math.floor(y(d.value)) + 1 / window.devicePixelRatio)
+          .curve(d3.curveLinear);
+        
+        console.log(`Adding reference overlay for ${instanceId}, measure ${measureId}, data points: ${m4Data.length}`);
+        
+        // Append the m4 overlay path with increased visibility
+        svg.append('path')
+          .attr('class', 'm4-overlay')
+          .datum(m4Data)
+          .attr('fill', 'none')
+          .attr('stroke', 'red')  
+          .attr('stroke-width', 1)  
+          .attr('stroke-opacity', 0.6)  
+          .attr('d', line);
+
+        // Add debug information to the console
+        if (svg.select('.m4-overlay').empty()) {
+          console.error('Failed to add reference line to SVG');
+        } else {
+          console.log('Reference line added successfully');
+        }
+
+        // Also update SSIM calculation if we have both reference data and method data
+        if (queryResults[instanceId] && queryResults[instanceId]?.data[measureId]) {
+          calculateAllSSIMValues();
+        }
+      });
+    });
+  }, [referenceResults, width, height, measures, selectedMethodInstances]);
+  
+
+  // Add debugging for reference data fetching
+  const fetchReferenceData = async () => {
+    if (!metadata || !from || !to || !measures.length) {
+      console.log("Cannot fetch reference data: missing metadata, time range or measures");
+      return null;
+    }
+    
+    if (referenceAbortController.current) {
+      referenceAbortController.current.abort();
+    }
+    const controller = new AbortController();
+    referenceAbortController.current = controller;
+    
+    setIsReferenceFetching(true);
+    try {
+      const chartWidth = width - margin.left - margin.right;
+      const chartHeight = Math.floor(height / measures.length / selectedMethodInstances.length - margin.bottom - margin.top);
+
+      // Use the M4 instance ID for reference data
+      const m4InstanceId = `${REFERENCE_METHOD}-reference`;
+
+      const request: Query = {
+        query: {
+          methodConfig: {
+            key: m4InstanceId,
+            params: {},
+          },
+          from: from,
+          to: to,
+          measures: measures.map(m => m.id),
+          width: chartWidth,
+          height: chartHeight,
+          schema: schema,
+          table: table,
+          params: {},
+        },
+      };
+
+      console.log("Fetching reference data:", request);
+      const response = await apiService.getData(
+        datasource,
+        queryToQueryDto(request),
+        controller.signal
+      );
+
+      if (response) {
+        console.log("Reference data received:", response);
+        const newReferenceResults = measures.reduce((acc, measure, index) => {
+          acc[measure.id] = response;
+          return acc;
+        }, {} as Record<number, QueryResultsDto>);
+        
+        setReferenceResults(newReferenceResults);
+        console.log("Reference results set:", newReferenceResults);
+      }
+
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        console.log('Reference data fetch cancelled');
+      } else {
+        console.error('Error fetching reference data:', error);
+      }
+    } finally {
+      setIsReferenceFetching(false);
+    }
+  };
+
+  // Modify effect to ensure quality metrics toggle correctly handles reference data
+  useEffect(() => {
+    if (showQualityMetrics) {
+      console.log("Quality metrics enabled, fetching reference data");
+      fetchReferenceData();
+    } else {
+      console.log("Quality metrics disabled, clearing reference data");
+      setReferenceResults({});
+      setSSIMValues({});
+      // Also remove any existing reference overlays
+      d3.selectAll('.m4-overlay').remove();
+    }
+  }, [showQualityMetrics]);
+
+
   const renderChart = (
     selector: string,
     data: { timestamp: number; value: number }[],
@@ -454,7 +838,6 @@ const Dashboard = () => {
     const instanceId = selectorParts[1];
     const measureIndexStr = selectorParts[2].split('-')[0];
     const measureIndex = parseInt(measureIndexStr);
-    const isModal = selector.includes('-modal');
   
     // Convert x to Date from timestamp
     const formattedData = data.map((d: any) => [new Date(d.timestamp), d.value] as [Date, number]);
@@ -552,26 +935,60 @@ const Dashboard = () => {
       .style('shape-rendering', 'crispEdges')
       .attr('d', line);
   
-    // Add SSIM label if quality metrics are enabled and value exists
-    if (showQualityMetrics && ssimValues[instanceId] && ssimValues[instanceId][measureIndex] !== undefined) {
-      const ssimValue = ssimValues[instanceId][measureIndex];
+    // Add SSIM label if quality metrics are enabled
+    if (showQualityMetrics) {
+      const hasSSIMValue = ssimValues[instanceId] && ssimValues[instanceId][measureIndex] !== undefined;
+      const hasReferenceData = Object.keys(referenceResults).length > 0;
       
-      // Add a semi-transparent background for better visibility
-      svg.append('rect')
-        .attr('x', width - 70)
-        .attr('y', 5)
-        .attr('width', 65)
-        .attr('height', 20)
-        .attr('fill', 'rgba(255, 255, 255, 0.7)');
-      
-      // Add the SSIM text
-      svg.append('text')
-        .attr('x', width - 65)
-        .attr('y', 20)
-        .attr('text-anchor', 'start')
-        .attr('font-size', '12px')
-        .attr('fill', ssimValue > 0.8 ? 'green' : ssimValue > 0.6 ? 'orange' : 'red')
-        .text(`SSIM: ${ssimValue.toFixed(3)}`);
+      if (hasSSIMValue || hasReferenceData) {
+        // Create a background for metrics info
+        svg.append('rect')
+          .attr('class', 'metrics-info-bg')
+          .attr('x', width - 135)
+          .attr('y', 5)
+          .attr('width', 130)
+          .attr('height', hasSSIMValue && hasReferenceData ? 40 : 20)
+          .attr('rx', 4)
+          .attr('fill', 'rgba(255, 255, 255, 0.85)')
+          .attr('stroke', 'rgba(0, 0, 0, 0.1)')
+          .attr('stroke-width', 1);
+        
+        // Add the reference data indicator
+        if (hasReferenceData) {
+          svg.append('line')
+            .attr('class', 'reference-legend')
+            .attr('x1', width - 130)
+            .attr('y1', 15)
+            .attr('x2', width - 105)
+            .attr('y2', 15)
+            .attr('stroke', 'red')  // Match the color of the reference line
+            .attr('stroke-width', 2);
+
+          svg.append('text')
+            .attr('class', 'reference-legend-text')
+            .attr('x', width - 100)
+            .attr('y', 19)
+            .attr('text-anchor', 'start')
+            .attr('font-size', '12px')
+            .attr('fill', '#333')
+            .text('Reference');
+        }
+        
+        // Add the SSIM value if available
+        if (hasSSIMValue) {
+          const ssimValue = ssimValues[instanceId][measureIndex];
+          const yOffset = hasReferenceData ? 35 : 19;
+          
+          svg.append('text')
+            .attr('class', 'ssim-value')
+            .attr('x', width - 130)
+            .attr('y', yOffset)
+            .attr('text-anchor', 'start')
+            .attr('font-size', '12px')
+            .attr('fill', ssimValue > 0.8 ? 'green' : ssimValue > 0.6 ? 'orange' : 'red')
+            .text(`SSIM: ${ssimValue.toFixed(3)}`);
+        }
+      }
     }
   
     const zoom = d3
@@ -609,385 +1026,9 @@ const Dashboard = () => {
       width,
       height,
       instanceId,
-      measureIndex,
-      isModal
+      measureIndex
     };
   };
-
-  // Function to render the magnified chart content
-  const renderMagnifiedContent = () => {
-    if (!magnifierContent || !magnifierVisible) return null;
-    
-    const { instanceId, measureIndex, isModal } = magnifierContent;
-    
-    // Get the SVG selector
-    const svgSelector = isModal 
-      ? `#svg_${instanceId}_${measures[measureIndex].id}-modal`
-      : `#svg_${instanceId}_${measureIndex}`;
-    
-    const svgElement = document.querySelector(svgSelector);
-    if (!svgElement) return null;
-    
-    const svgRect = svgElement.getBoundingClientRect();
-    
-    // Calculate mouse position relative to the SVG
-    const relativeX = magnifierPosition.x - svgRect.left;
-    const relativeY = magnifierPosition.y - svgRect.top;
-    
-    // Create a clipping group that will show only part of the chart
-    return (
-      <svg width={MAGNIFIER_SIZE} height={MAGNIFIER_SIZE} viewBox={`0 0 ${MAGNIFIER_SIZE} ${MAGNIFIER_SIZE}`}>
-        <defs>
-          <clipPath id="magnifierClip">
-            <circle cx={MAGNIFIER_SIZE/2} cy={MAGNIFIER_SIZE/2} r={MAGNIFIER_SIZE/2 - 1} />
-          </clipPath>
-        </defs>
-        
-        {/* Use a group with the clip path and translation for proper centering */}
-        <g clipPath="url(#magnifierClip)">
-          {/* Create a translated and scaled clone of the SVG content */}
-          <g 
-            transform={`translate(${MAGNIFIER_SIZE/2 - relativeX * ZOOM_FACTOR}, ${MAGNIFIER_SIZE/2 - relativeY * ZOOM_FACTOR}) scale(${ZOOM_FACTOR})`}
-            dangerouslySetInnerHTML={{ 
-              __html: svgElement.innerHTML 
-            }}
-          />
-        </g>
-        
-        {/* Add crosshair in the center */}
-        <line 
-          x1={MAGNIFIER_SIZE/2} 
-          y1="0" 
-          x2={MAGNIFIER_SIZE/2} 
-          y2={MAGNIFIER_SIZE} 
-          stroke="red" 
-          strokeWidth="1" 
-          strokeDasharray="2,2"
-        />
-        <line 
-          x1="0" 
-          y1={MAGNIFIER_SIZE/2} 
-          x2={MAGNIFIER_SIZE} 
-          y2={MAGNIFIER_SIZE/2} 
-          stroke="red" 
-          strokeWidth="1" 
-          strokeDasharray="2,2"
-        />
-      </svg>
-    );
-  };
-
-  const fetchReferenceData = async () => {
-    if (!metadata || !from || !to || !measures.length) return null;
-    
-    if (referenceAbortController.current) {
-      referenceAbortController.current.abort();
-    }
-    const controller = new AbortController();
-    referenceAbortController.current = controller;
-    
-    setIsReferenceFetching(true);
-    try {
-      const chartWidth = width - margin.left - margin.right;
-      const chartHeight = Math.floor(height / measures.length / selectedMethodInstances.length - margin.bottom - margin.top);
-
-      // Use the M4 instance ID for reference data
-      const m4InstanceId = `${REFERENCE_METHOD}-reference`;
-
-      const request: Query = {
-        query: {
-          methodConfig: {
-            key: m4InstanceId,
-            params: {},
-          },
-          from: from,
-          to: to,
-          measures: measures.map(m => m.id),
-          width: chartWidth,
-          height: chartHeight,
-          schema: schema,
-          table: table,
-          params: {},
-        },
-      };
-
-      const response = await apiService.getData(
-        datasource,
-        queryToQueryDto(request),
-        controller.signal
-      );
-
-      if (response) {
-        const newReferenceResults = measures.reduce((acc, measure, index) => {
-          acc[measure.id] = response;
-          return acc;
-        }, {} as Record<number, QueryResultsDto>);
-        
-        setReferenceResults(newReferenceResults);
-
-        // calculateAllSSIMValues(newReferenceResults);
-        
-      }
-
-    } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log('Reference data fetch cancelled');
-      } else {
-        console.error('Error fetching reference data:', error);
-      }
-    } finally {
-      setIsReferenceFetching(false);
-    }
-  };
-
-  // New function to calculate SSIM values for all charts
-  const calculateAllSSIMValues = async (refResults: Record<number, QueryResultsDto> = referenceResults) => {
-    if (Object.keys(refResults).length === 0) {
-      console.log("No reference results available");
-      return;
-    }
-
-    setIsCalculatingSSIM(true);
-    
-    try {
-      const newSSIMValues: Record<string, Record<number, number>> = {};
-      
-      // For each method instance
-      for (const instanceId of selectedMethodInstances) {
-        // Skip the reference method itself
-        if (instanceId === `${REFERENCE_METHOD}-reference`) continue;
-        
-        newSSIMValues[instanceId] = {};
-        const methodResults = queryResults[instanceId];
-        
-        if (!methodResults) continue;
-        
-        // For each measure
-        measures.forEach((measure, index) => {
-          const referenceResult = refResults[measure.id];
-          
-          if (methodResults && referenceResult) {
-            const ssimValue = calculateSSIM(
-              methodResults.data[measure.id],
-              referenceResult.data[measure.id],
-              width,
-              height / measures.length,
-              instanceId
-            );
-            
-            newSSIMValues[instanceId][index] = ssimValue;
-          }
-        });
-      }
-      
-      setSSIMValues(newSSIMValues);
-    } finally {
-      setIsCalculatingSSIM(false);
-    }
-  };
-
-  // Function to toggle SSIM calculation
-  const handleToggleQualityMetrics = () => {
-    const newValue = !showQualityMetrics;
-    setShowQualityMetrics(newValue);
-  };
-
-  // New function to toggle magnifier overlay on existing charts
-  const toggleMagnifierOverlay = (enabled: boolean) => {
-    // For all SVGs with the chart-svg class
-    d3.selectAll('.chart-svg').each(function(this: SVGSVGElement) {
-      const svg = d3.select(this);
-      const svgNode = svg.node() as SVGSVGElement;
-      if (!svgNode) return;
-      // Get selector to extract chart metadata
-      const id = svgNode.id;
-      if (!id) return;
-  
-      const selectorParts = id.split('_');
-      if (selectorParts.length < 3) return;
-      
-      const instanceId = selectorParts[1];
-      const measureIndexStr = selectorParts[2].split('-')[0];
-      const measureIndex = parseInt(measureIndexStr);
-      const isModal = id.includes('-modal');
-      
-      // Remove any existing magnifier overlay
-      svg.selectAll('.magnifier-overlay').remove();
-  
-      // Add new overlay if enabled
-      if (enabled) {
-        svg.append('rect')
-          .attr('class', 'magnifier-overlay')
-          .attr('width', svgNode.width.baseVal.value)
-          .attr('height', svgNode.height.baseVal.value)
-          .attr('fill', 'transparent')
-          .on('mousemove', function(event:any) {
-            setMagnifierPosition({x: event.pageX, y: event.pageY});
-            setMagnifierContent({
-              instanceId,
-              measureIndex,
-              isModal
-            });
-            setMagnifierVisible(true);
-          })
-          .on('mouseleave', function() {
-            setMagnifierVisible(false);
-          });
-      }
-    });
-  };
-
-  useEffect(()=> {
-    if (showQualityMetrics) {
-      fetchReferenceData();
-    }
-    else {
-      setReferenceResults({});
-    }
-  },[showQualityMetrics])
-
-
-  const [selectedMethodInstances, setSelectedMethodInstances] = useState<string[]>([]);
-  const [loadingCharts, setLoadingCharts] = useState<Record<string, boolean>>({});
-
-  const formatInstanceId = (instanceId: string) => {
-    const [method, timestamp] = instanceId.split('-');
-  
-    if (!hasConfigParameters(method)) {
-      return method;
-    }
-  
-    const instances = methodInstances[method] || [];
-    if (instances.length === 1) {
-      return method;
-    }
-  
-    const instanceNumber = instances.findIndex(inst => inst.id === instanceId) + 1;
-    return `${method}-${instanceNumber}`;
-  };
-
-  const handleMethodInstanceChange = (event: SelectChangeEvent<string[]>) => {
-    const {
-      target: { value },
-    } = event;
-    const newSelected = typeof value === 'string' ? value.split(',') : value;
-    setSelectedMethodInstances(newSelected);
-    
-    // Clear results for deselected instances
-    setQueryResults(prev => {
-      const newResults = {...prev};
-      Object.keys(newResults).forEach(key => {
-        if (!newSelected.includes(key)) {
-          delete newResults[key];
-        }
-      });
-      return newResults;
-    });
-    
-    setResponseTimes(prev => {
-      const newTimes = {...prev};
-      Object.keys(newTimes).forEach(key => {
-        if (!newSelected.includes(key)) {
-          delete newTimes[key];
-        }
-      });
-      return newTimes;
-    });
-  };
-
-  // reset zoom
-  useEffect(() => {
-    if (!measures.length) return;
-    for (const algo of selectedMethodInstances) {
-      const res = queryResults[algo];
-      if (!res) continue;
-      const series = Object.values(res.data);
-      series.forEach((_, index) => {
-        const svg = d3.select(`#svg_${algo}_${index}`);
-        svg.call(d3.zoom().transform, d3.zoomIdentity);
-      });
-    }
-  }, [queryResults, measures, selectedMethodInstances]);
-  
-
-  // reset zoom in modal
-  useEffect(() => {
-    if (selectedChart === null) return;
-    for (const algo of selectedMethodInstances) {
-      const svg = d3.select(`#svg_${algo}_${selectedChart}-modal`);
-      svg.call(d3.zoom().transform, d3.zoomIdentity);
-    }
-  }, [selectedChart, selectedMethodInstances]);
-
-  useEffect(() => {
-    // Loop over each measure and for each selected method instance
-    
-    measures.forEach((measure, measureIndex) => {
-      selectedMethodInstances.forEach(instanceId => {
-        // Skip the m4 reference instance itself
-        if (instanceId === `${REFERENCE_METHOD}-reference`) return;
-  
-        // Select the corresponding SVG element
-        const svg = d3.select(`#svg_${instanceId}_${measureIndex}`);
-        
-        if (svg.empty()) {
-          console.error(`SVG not found for instance ${instanceId} and measure index ${measureIndex}`);
-          return;
-        }
-        // Remove any existing m4 overlay from this SVG
-        svg.selectAll('.m4-overlay').remove();
-        
-        if (!showQualityMetrics) return;
-        // Retrieve m4 data for this measure from referenceResults
-        const m4Data = referenceResults[measure.id]?.data[measure.id];
-        const timeRange = referenceResults[measure.id]?.timeRange;
-        if (!m4Data) {
-          console.error(`No m4 data found for measure ${measure.id}`);
-          return;
-        }
-        const minTs = new Date(timeRange.from);
-        const maxTs = new Date(timeRange.to);
-
-        const chartWidth = width - (DEFAULT_CHART_PADDING * 2); // minus 10 pixels for padding = 5px
-        const chartHeight =  Math.floor(height / measures.length / selectedMethodInstances.length);
-
-        // Compute x scale using the common time range
-        const x = d3
-          .scaleTime()
-          .domain([minTs, maxTs])
-          .range([margin.left + 1, Math.floor(chartWidth - margin.right)]);
-  
-        // Compute y scale based on the m4 data
-        const formattedM4 = m4Data.map(d => [new Date(d.timestamp), d.value]);
-        const m4Min = d3.min(formattedM4, (d:any) => d[1]);
-        const m4Max = d3.max(formattedM4, (d:any) => d[1]);
-
-        const y = d3
-          .scaleLinear()
-          .domain([m4Min, m4Max])
-          .range([chartHeight - margin.bottom - 1, margin.top]);
-  
-        // Create a line generator for the m4 overlay
-        const line = d3
-          .line()
-          .x((d:any) => Math.floor(x(new Date(d.timestamp))) + 1 / window.devicePixelRatio)
-          .y((d:any) => Math.floor(y(d.value)) + 1 / window.devicePixelRatio)
-          .curve(d3.curveLinear);
-
-  
-        // Append the m4 overlay path using a light red stroke
-        svg.append('path')
-          .attr('class', 'm4-overlay')
-          .datum(m4Data)
-          .attr('fill', 'none')
-          .attr('stroke', 'lightcoral')
-          .attr('stroke-width', 1 / window.devicePixelRatio)
-          .style('shape-rendering', 'crispEdges')
-          .attr('stroke-opacity', 0.8)
-          .attr('d', line);
-      });
-    });
-  }, [referenceResults, width, height, measures, selectedMethodInstances]);
 
   // render chart
   useEffect(() => {
@@ -1046,9 +1087,12 @@ const Dashboard = () => {
       }));
     }
 
+    if(showQualityMetrics){
+      fetchReferenceData();
+    }
+
   }, [
     queryResults,
-    ssimValues,
     selectedMethodInstances,
     metadata,
     height,
@@ -1060,83 +1104,11 @@ const Dashboard = () => {
   }, [magnifierEnabled])
 
 
-  // Similar update for the modal rendering useEffect
-  useEffect(() => {
-    if (!measures.length || !queryResults || selectedChart === null) return;
-
-    // Track rendering times for Redux updates
-    let renderingTimesByInstance: Record<string, number> = {};
-
-    for (const algo of selectedMethodInstances) {
-      const res = queryResults[algo];
-      if (!res) continue;
-      const series = Object.values(res.data);
-      const timeRange = res.timeRange;
-      let totalRenderTime = 0;
-
-      // For each measure index, we have series[index]
-      series.forEach((data, index) => {
-        const renderStartTime = performance.now();
-        
-        renderChart(
-          `#svg_${algo}_${selectedChart}-modal`,
-          data,
-          modalWidth,
-          Math.floor(modalHeight / selectedMethodInstances.length),
-          {from: timeRange.from, to: timeRange.to}
-        );
-        
-        const renderEndTime = performance.now();
-        const renderTime = renderEndTime - renderStartTime;
-        totalRenderTime += renderTime;
-      });
-
-      renderingTimesByInstance[algo] = totalRenderTime;
-
-      setResponseTimes((prev) => ({
-        ...prev,
-        [algo]: {
-          ...prev[algo],
-          rendering: totalRenderTime,
-        },
-      }));
-    }
-
-    // Apply magnifier overlays if enabled
-    if (magnifierEnabled) {
-      toggleMagnifierOverlay(true);
-    }
-
-    // Update Redux store with rendering times for modal view too
-    if (Object.keys(renderingTimesByInstance).length > 0 && currentOperationId) {
-      dispatch(updateRenderingTimes({
-        operationId: currentOperationId,
-        renderingTimes: renderingTimesByInstance
-      }));
-    }
-
-  }, [
-    queryResults,
-    selectedMethodInstances,
-    metadata,
-    modalHeight,
-    selectedChart,
-  ]);
-
   // add resize handler for charts
   useEffect(() => {
     d3.select(window).on('resize', function () {
       if (d3.select('#chart-content').node()) {
         setWidth(Math.floor(d3.select('#chart-content').node().getBoundingClientRect().width));
-      }
-    
-      if (d3.select('#chart-content-modal').node()) {
-        setModalWidth(
-          Math.floor(d3.select('#chart-content-modal').node().getBoundingClientRect().width)
-        );
-        setModalHeight(
-          Math.floor(d3.select('#chart-content-modal').node().getBoundingClientRect().height)
-        );
       }
     });
   }, []);
@@ -1319,7 +1291,6 @@ const Dashboard = () => {
   const [magnifierContent, setMagnifierContent] = useState<{
     instanceId: string,
     measureIndex: number,
-    isModal: boolean
   } | null>(null);
   const magnifierRef = useRef<HTMLDivElement>(null);
   
@@ -2114,25 +2085,6 @@ const Dashboard = () => {
                         display: 'flex', 
                         flexDirection: 'column'
                       }}>
-                        <Box
-                          display="flex"
-                          flexDirection={'row'}
-                          flexWrap={'nowrap'}
-                          alignItems={'center'}
-                          justifyContent={'right'}
-                        >
-                        
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelectedChart(measure.id);
-                              setIsModalOpen(true);
-                            }}
-                          >
-                            <OpenInFullIcon fontSize={'small'} />
-                          </IconButton>
-                        </Box>
-
                         {/* For each selected method instance, display a sub-chart for this measure */}
                         {selectedMethodInstances.map((instanceId) => {
                           const algoResult = queryResults[instanceId];
@@ -2295,94 +2247,29 @@ const Dashboard = () => {
             </Box>
           </Card>
         </Resizable>
-      </Box>
 
-      {/* Modal dialog for fullscreen charts */}
-      <Dialog
-        open={isModalOpen}
-        fullWidth
-        maxWidth="xl"
-        PaperProps={{
-          style: { height: '90vh', overflow: 'hidden' },
-        }}
-      >
-        <Box sx={{ width: '100%', height: '100%', p: 2 }}>
-          <Box display={'flex'} alignItems={'flex-end'}>
-            {selectedChart !== null && (
-              <Typography
-                style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
-                variant="body1"
-              >
-                {measures[selectedChart]?.name}
-              </Typography>
-            )}
-            <IconButton
-              size="small"
-              onClick={() => {
-                setSelectedChart(null);
-                setIsModalOpen(false);
-              }}
-              style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
-            >
-              <CloseIcon fontSize={'small'} />
-            </IconButton>
-          </Box>
-
-          <Box
-            sx={{ width: '100%', height: '100%', transform: 'translate(0, 0)' }}
-            id="chart-content-modal"
+        {/* Magnifying lens element - only show if enabled */}
+        {magnifierVisible && magnifierEnabled && (
+          <div 
+            ref={magnifierRef}
+            style={{
+              position: 'fixed',
+              left: magnifierPosition.x - MAGNIFIER_SIZE/2,
+              top: magnifierPosition.y - MAGNIFIER_SIZE/2,
+              width: MAGNIFIER_SIZE,
+              height: MAGNIFIER_SIZE,
+              pointerEvents: 'none',
+              zIndex: 9999,
+              boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+              borderRadius: '50%',
+              overflow: 'hidden',
+              border: '2px solid white',
+            }}
           >
-            {selectedChart !== null &&
-              selectedMethodInstances.map((instanceId) => (
-                <Box key={`svg_${instanceId}_${selectedChart}-modal`} position="relative">
-                  <svg
-                    id={`svg_${instanceId}_${selectedChart}-modal`}
-                    width={modalWidth}
-                    height={modalHeight / selectedMethodInstances.length}
-                  />
-                  {loadingCharts[instanceId] && (
-                    <Box
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      width="100%"
-                      height="100%"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      bgcolor="rgba(255, 255, 255, 0.7)"
-                      zIndex={1}
-                    >
-                      <CircularProgress size={'3rem'} />
-                    </Box>
-                  )}
-                </Box>
-              ))}
-          </Box>
-        </Box>
-      </Dialog>
-
-      {/* Magnifying lens element - only show if enabled */}
-      {magnifierVisible && magnifierEnabled && (
-        <div 
-          ref={magnifierRef}
-          style={{
-            position: 'fixed',
-            left: magnifierPosition.x - MAGNIFIER_SIZE/2,
-            top: magnifierPosition.y - MAGNIFIER_SIZE/2,
-            width: MAGNIFIER_SIZE,
-            height: MAGNIFIER_SIZE,
-            pointerEvents: 'none',
-            zIndex: 9999,
-            boxShadow: '0 0 10px rgba(0,0,0,0.3)',
-            borderRadius: '50%',
-            overflow: 'hidden',
-            border: '2px solid white',
-          }}
-        >
-          {renderMagnifiedContent()}
-        </div>
-      )}
+            {renderMagnifiedContent()}
+          </div>
+        )}
+      </Box>
     </Box>
   );
 };
