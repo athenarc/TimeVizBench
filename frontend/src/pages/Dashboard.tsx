@@ -59,7 +59,7 @@ import React from 'react';
 const DEFAULT_CHART_PADDING = 5;
 const DRAWER_WIDTH = 420;
 const MIN_LOG_HEIGHT = "20%"; // Reduced minimum height
-const MAX_LOG_HEIGHT = "60%"; // Reduced maximum height
+const MAX_LOG_HEIGHT = "80%"; // Reduced maximum height
 const DEFAULT_LOG_HEIGHT = window.innerHeight * 0.3; // 30% of the window height
 const PADDING_BETWEEN_SECTIONS = 8; // Padding between main sections
 
@@ -2200,15 +2200,58 @@ const Dashboard = () => {
           onResizeStop={(e, direction, ref, d) => {
             setLogHeight(logHeight + d.height);
           }}
-          handleStyles={{
-            top: {
-              cursor: 'row-resize',
-              backgroundColor: 'rgba(0,0,0,0.05)',
-              borderTop: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '1px 1px 0 0',
-              height: '8px', // Make handle easier to grab
-              zIndex: 10,
-            },
+          handleComponent={{
+            top: (
+              <div
+                style={{
+                  position: 'relative',
+                  top: `${-PADDING_BETWEEN_SECTIONS / 2 + 1}px`,
+                  width: '100%',
+                  height: '8px',
+                  cursor: 'row-resize',
+                }}
+              >
+                {/* Top line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    // borderTop: '1px solid #ccc',
+                  }}
+                />
+                
+                {/* Bottom line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    // borderTop: '1px solid #ccc',
+                  }}
+                />
+                
+                {/* The “grip” in the middle */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '30px',
+                    height: '4px',
+                    backgroundColor: '#999',
+                    borderRadius: '2px',
+                  }}
+                />
+              </div>
+            ),
+          }}
+          style={{
+            background: '#fff',
+            boxSizing: 'border-box',
           }}
         >
           <Card
