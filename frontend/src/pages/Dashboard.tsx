@@ -671,7 +671,7 @@ const Dashboard = () => {
         
         // Remove any existing m4 overlay from this SVG
         svg.selectAll('.m4-overlay').remove();
-        
+
         // Get measure ID and corresponding reference data
         const measureId = measure.id;
         const m4Data = referenceResults[measureId]?.data[measureId];
@@ -738,6 +738,85 @@ const Dashboard = () => {
     });
   }, [referenceResults, width, height, measures, selectedMethodInstances]);
   
+
+  useEffect(() => {
+    // Add SSIM label if quality metrics are enabled
+    measures.forEach((measure, measureIndex) => {
+      selectedMethodInstances.forEach(instanceId => {
+        // Skip the m4 reference instance itself
+        if (instanceId === `${REFERENCE_METHOD}-reference`) return;
+  
+        // Select the corresponding SVG element
+        const svg = d3.select(`#svg_${instanceId}_${measureIndex}`);
+        
+        if (svg.empty()) {
+          console.error(`SVG not found for instance ${instanceId} and measure index ${measureIndex}`);
+          return;
+        }
+        
+        // Remove any existing m4 overlay from this SVG
+        svg.selectAll('.metrics-info-bg').remove();
+        svg.selectAll('.reference-legend').remove();
+        svg.selectAll('.reference-legend-text').remove();
+        svg.selectAll(".ssim-value").remove();
+  
+        if (showQualityMetrics) {
+          const hasSSIMValue = ssimValues[instanceId] && ssimValues[instanceId][measureIndex] !== undefined;
+          const hasReferenceData = Object.keys(referenceResults).length > 0;
+          
+          if (hasSSIMValue || hasReferenceData) {
+            // Create a background for metrics info
+            svg.append('rect')
+              .attr('class', 'metrics-info-bg')
+              .attr('x', width - 135)
+              .attr('y', 5)
+              .attr('width', 130)
+              .attr('height', hasSSIMValue && hasReferenceData ? 40 : 20)
+              .attr('rx', 4)
+              .attr('fill', 'rgba(255, 255, 255, 0.85)')
+              .attr('stroke', 'rgba(0, 0, 0, 0.1)')
+              .attr('stroke-width', 1);
+            
+            // Add the reference data indicator
+            if (hasReferenceData) {
+              svg.append('line')
+                .attr('class', 'reference-legend')
+                .attr('x1', width - 130)
+                .attr('y1', 15)
+                .attr('x2', width - 105)
+                .attr('y2', 15)
+                .attr('stroke', 'red')  // Match the color of the reference line
+                .attr('stroke-width', 2);
+
+              svg.append('text')
+                .attr('class', 'reference-legend-text')
+                .attr('x', width - 100)
+                .attr('y', 19)
+                .attr('text-anchor', 'start')
+                .attr('font-size', '12px')
+                .attr('fill', '#333')
+                .text('Reference');
+            }
+            
+            // Add the SSIM value if available
+            if (hasSSIMValue) {
+              const ssimValue = ssimValues[instanceId][measureIndex];
+              const yOffset = hasReferenceData ? 35 : 19;
+              
+              svg.append('text')
+                .attr('class', 'ssim-value')
+                .attr('x', width - 130)
+                .attr('y', yOffset)
+                .attr('text-anchor', 'start')
+                .attr('font-size', '12px')
+                .attr('fill', ssimValue > 0.8 ? 'green' : ssimValue > 0.6 ? 'orange' : 'red')
+                .text(`SSIM: ${ssimValue.toFixed(3)}`);
+            }
+          }
+        }
+      });
+    });
+  },[ssimValues]);
 
   // Add debugging for reference data fetching
   const fetchReferenceData = async () => {
@@ -934,62 +1013,7 @@ const Dashboard = () => {
       .attr('stroke-width', 1 / window.devicePixelRatio)
       .style('shape-rendering', 'crispEdges')
       .attr('d', line);
-  
-    // Add SSIM label if quality metrics are enabled
-    if (showQualityMetrics) {
-      const hasSSIMValue = ssimValues[instanceId] && ssimValues[instanceId][measureIndex] !== undefined;
-      const hasReferenceData = Object.keys(referenceResults).length > 0;
-      
-      if (hasSSIMValue || hasReferenceData) {
-        // Create a background for metrics info
-        svg.append('rect')
-          .attr('class', 'metrics-info-bg')
-          .attr('x', width - 135)
-          .attr('y', 5)
-          .attr('width', 130)
-          .attr('height', hasSSIMValue && hasReferenceData ? 40 : 20)
-          .attr('rx', 4)
-          .attr('fill', 'rgba(255, 255, 255, 0.85)')
-          .attr('stroke', 'rgba(0, 0, 0, 0.1)')
-          .attr('stroke-width', 1);
-        
-        // Add the reference data indicator
-        if (hasReferenceData) {
-          svg.append('line')
-            .attr('class', 'reference-legend')
-            .attr('x1', width - 130)
-            .attr('y1', 15)
-            .attr('x2', width - 105)
-            .attr('y2', 15)
-            .attr('stroke', 'red')  // Match the color of the reference line
-            .attr('stroke-width', 2);
 
-          svg.append('text')
-            .attr('class', 'reference-legend-text')
-            .attr('x', width - 100)
-            .attr('y', 19)
-            .attr('text-anchor', 'start')
-            .attr('font-size', '12px')
-            .attr('fill', '#333')
-            .text('Reference');
-        }
-        
-        // Add the SSIM value if available
-        if (hasSSIMValue) {
-          const ssimValue = ssimValues[instanceId][measureIndex];
-          const yOffset = hasReferenceData ? 35 : 19;
-          
-          svg.append('text')
-            .attr('class', 'ssim-value')
-            .attr('x', width - 130)
-            .attr('y', yOffset)
-            .attr('text-anchor', 'start')
-            .attr('font-size', '12px')
-            .attr('fill', ssimValue > 0.8 ? 'green' : ssimValue > 0.6 ? 'orange' : 'red')
-            .text(`SSIM: ${ssimValue.toFixed(3)}`);
-        }
-      }
-    }
   
     const zoom = d3
       .zoom()
@@ -1525,6 +1549,12 @@ const Dashboard = () => {
     );
   };
 
+  const qualityMeasuresDisabled = () => {
+    return selectedMethodInstances.length === 0 || 
+           (selectedMethodInstances.length === 1 && 
+            selectedMethodInstances[0] === `${REFERENCE_METHOD}-reference`);
+  }
+  
   // Render chart view of logs
   const renderLogsCharts = () => {
     const filteredHistory = getFilteredQueryHistory();
@@ -1959,30 +1989,35 @@ const Dashboard = () => {
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                       <Typography variant="body2">Quality Measure</Typography>
                       <Box
-                        component="span"
-                        sx={{
-                          position: 'relative',
-                          display: 'inline-flex',
-                          width: 46,
-                          height: 24,
-                          borderRadius: 24,
-                          backgroundColor: showQualityMetrics ? 'primary.main' : 'grey.400',
-                          cursor: 'pointer',
-                          transition: 'background-color 300ms',
-                          '&:before': {
-                            content: '""',
-                            position: 'absolute',
-                            width: 20,
-                            height: 20,
-                            left: showQualityMetrics ? 22 : 2,
-                            bottom: 2,
-                            borderRadius: '50%',
-                            transition: 'left 300ms',
-                            backgroundColor: 'white',
-                          },
-                        }}
-                        onClick={handleToggleQualityMetrics}
-                      />
+                          component="span"
+                          sx={{
+                            position: 'relative',
+                            display: 'inline-flex',
+                            width: 46,
+                            height: 24,
+                            borderRadius: 24,
+                            backgroundColor: qualityMeasuresDisabled()
+                              ? 'grey.300'
+                              : showQualityMetrics
+                              ? 'primary.main'
+                              : 'grey.400',
+                            cursor: qualityMeasuresDisabled() ? 'not-allowed' : 'pointer',
+                            opacity: qualityMeasuresDisabled() ? 0.6 : 1,
+                            transition: 'background-color 300ms',
+                            '&:before': {
+                              content: '""',
+                              position: 'absolute',
+                              width: 20,
+                              height: 20,
+                              left: showQualityMetrics ? 22 : 2,
+                              bottom: 2,
+                              borderRadius: '50%',
+                              transition: 'left 300ms',
+                              backgroundColor: 'white',
+                            },
+                          }}
+                          onClick={qualityMeasuresDisabled() ? undefined : handleToggleQualityMetrics}
+                        />
                     </Box>      
                     {/* Status indicators */}
                     {isCalculatingSSIM && (
