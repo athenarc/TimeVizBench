@@ -1,9 +1,7 @@
 package gr.imsi.athenarc.visual.middleware.methods;
 
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
-import gr.imsi.athenarc.visual.middleware.datasource.InfluxDBDatasource;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
-import gr.imsi.athenarc.visual.middleware.datasource.executor.QueryExecutor;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.DateTimeUtil;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;

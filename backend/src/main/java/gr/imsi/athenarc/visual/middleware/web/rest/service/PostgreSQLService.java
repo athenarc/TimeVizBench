@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import gr.imsi.athenarc.visual.middleware.cache.MinMaxCache;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSourceFactory;
 import gr.imsi.athenarc.visual.middleware.datasource.PostgreSQLDatasource;
@@ -18,6 +17,7 @@ import gr.imsi.athenarc.visual.middleware.datasource.connection.JDBCConnection;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.PostgreSQLDataset;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQuery;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQueryResults;
+import gr.imsi.athenarc.visual.middleware.methods.cache.MinMaxCache;
 
 @Service
 public class PostgreSQLService {

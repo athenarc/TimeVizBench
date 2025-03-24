@@ -8,12 +8,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import gr.imsi.athenarc.visual.middleware.cache.MinMaxCache;
-import gr.imsi.athenarc.visual.middleware.cache.query.Query;
-import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.Parameter;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
+import gr.imsi.athenarc.visual.middleware.methods.cache.MinMaxCache;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.Query;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.QueryResults;
 
 @VisualMethod(
     name = "MinMaxCache",

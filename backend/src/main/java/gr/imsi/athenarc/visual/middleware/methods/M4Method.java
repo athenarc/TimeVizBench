@@ -10,7 +10,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Stopwatch;
 
-import gr.imsi.athenarc.visual.middleware.cache.query.ErrorResults;
 import gr.imsi.athenarc.visual.middleware.datasource.CsvDatasource;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.datasource.InfluxDBDatasource;
@@ -21,11 +20,11 @@ import gr.imsi.athenarc.visual.middleware.datasource.query.CsvQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.DataSourceQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.SQLQuery;
-import gr.imsi.athenarc.visual.middleware.domain.AggregatedDataPoints;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.ErrorResults;
 
 @VisualMethod(
     name = "M4",

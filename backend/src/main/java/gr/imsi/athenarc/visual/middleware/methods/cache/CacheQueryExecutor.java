@@ -1,4 +1,4 @@
-package gr.imsi.athenarc.visual.middleware.cache;
+package gr.imsi.athenarc.visual.middleware.methods.cache;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,9 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Stopwatch;
 
-import gr.imsi.athenarc.visual.middleware.cache.query.ErrorResults;
-import gr.imsi.athenarc.visual.middleware.cache.query.Query;
-import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.domain.AggregatedDataPoint;
@@ -28,6 +25,9 @@ import gr.imsi.athenarc.visual.middleware.domain.Stats;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
 import gr.imsi.athenarc.visual.middleware.domain.ViewPort;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.ErrorResults;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.Query;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.QueryResults;
 
 public class CacheQueryExecutor {
 

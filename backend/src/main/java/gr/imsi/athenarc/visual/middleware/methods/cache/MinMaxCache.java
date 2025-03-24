@@ -1,8 +1,8 @@
-package gr.imsi.athenarc.visual.middleware.cache;
+package gr.imsi.athenarc.visual.middleware.methods.cache;
 
-import gr.imsi.athenarc.visual.middleware.cache.query.Query;
-import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.Query;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.QueryResults;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

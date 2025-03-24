@@ -1,11 +1,11 @@
-package gr.imsi.athenarc.visual.middleware.cache;
+package gr.imsi.athenarc.visual.middleware.methods.cache;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import gr.imsi.athenarc.visual.middleware.cache.query.Query;
 import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.domain.IntervalTree;
+import gr.imsi.athenarc.visual.middleware.methods.cache.query.Query;
 
 import java.util.*;
 import java.util.stream.Collectors;

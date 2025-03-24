@@ -1,4 +1,4 @@
-package gr.imsi.athenarc.visual.middleware.cache;
+package gr.imsi.athenarc.visual.middleware.methods.cache;
 
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;

@@ -1,4 +1,4 @@
-package gr.imsi.athenarc.visual.middleware.cache.query;
+package gr.imsi.athenarc.visual.middleware.methods.cache.query;
 
 import java.time.Instant;
 import java.time.ZoneId;
