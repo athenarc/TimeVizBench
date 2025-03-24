@@ -84,7 +84,7 @@ const Dashboard = () => {
   const [to, setTo] = useState<Date>(dayjs(1330244930991).toDate());
 
   // default width, height will be reset once page is loaded
-  const [height, setHeight] = useState<number>(300);
+  const [height, setHeight] = useState<number>(0);
   const [width, setWidth] = useState<number>(0);
   
   const [minDate, setMinDate] = useState<Date | null>(null);
@@ -1119,6 +1119,7 @@ const Dashboard = () => {
     queryResults,
     selectedMethodInstances,
     metadata,
+    width,
     height,
   ]);
 
@@ -1163,7 +1164,6 @@ const Dashboard = () => {
     table,
     selectedChart,
   ]);
-
 
   const calculateSSIM = (methodData: any[], referenceData: any[], width: number, height: number, instanceId: string) => {
 
@@ -1228,7 +1228,7 @@ const Dashboard = () => {
     // Add M4 to selected instances by default
     setSelectedMethodInstances([m4Instance.id]);
   }, []);
-
+  
   const handleExportResults = () => {
     if (queryHistory.length === 0) {
       alert('No queries to export');
@@ -1327,6 +1327,29 @@ const Dashboard = () => {
   const [logViewMode, setLogViewMode] = useState<'table' | 'chart'>('table'); 
   const [logViewTimeframe, setLogViewTimeframe] = useState<'latest' | 'recent' | 'all'>('latest');
   const [logHeight, setLogHeight] = useState<number>(DEFAULT_LOG_HEIGHT);
+
+  // monitor window resize
+  useEffect(() => {
+    // Use setTimeout to allow the DOM to update first
+    setTimeout(() => {
+      const chartContentNode = d3.select('#chart-content').node();
+      if (chartContentNode) {
+        setWidth(Math.floor(chartContentNode.getBoundingClientRect().width));
+      }
+    }, 250);
+  }, [sidebarOpen])
+
+  useEffect(() => {
+    const chartContentElement = document.getElementById('chart-content');
+    if (chartContentElement) {
+      const chartContentHeight = 
+        chartContentElement.getBoundingClientRect().height 
+        - 4 * PADDING_BETWEEN_SECTIONS 
+        - (selectedMethodInstances.length * 8 * DEFAULT_CHART_PADDING)
+        - (measures.length * 8 * DEFAULT_CHART_PADDING);
+      setHeight(chartContentHeight);
+    }
+  }, [logHeight, selectedMethodInstances, measures]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
