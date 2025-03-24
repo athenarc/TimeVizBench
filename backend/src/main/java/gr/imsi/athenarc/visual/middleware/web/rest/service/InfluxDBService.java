@@ -10,8 +10,9 @@ import gr.imsi.athenarc.visual.middleware.methods.Method;
 import gr.imsi.athenarc.visual.middleware.methods.MethodManager;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQuery;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQueryResults;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.InfluxDBConnection;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.InfluxDBConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSourceFactory;
+import gr.imsi.athenarc.visual.middleware.datasource.config.InfluxDBConfiguration;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.InfluxDBDataset;
 
 @Service
@@ -31,35 +32,41 @@ public class InfluxDBService {
     @Value("${influxdb.bucket}")
     private String influxDbBucket;
 
-    private InfluxDBConnector influxDBConnector;
+    private DataSource dataSource;
+
+    private String timeFormat = "yyyy-MM-dd[ HH:mm:ss]";
 
     @Autowired
     public InfluxDBService() {
     }
 
     // Method to initialize InfluxDB connection manually
-    public void initializeConnection() {
-        InfluxDBConnection influxDBConnection = (InfluxDBConnection) new InfluxDBConnection(influxDbUrl, influxDbOrg, influxDbToken, influxDbBucket).connect();
-        influxDBConnector = new InfluxDBConnector(influxDBConnection);
+    public void initializeDataSource(String schema, String table) {
+        InfluxDBConfiguration  dataSourceConfiguration = new InfluxDBConfiguration.Builder()
+        .url(influxDbUrl)
+        .org(influxDbOrg)
+        .token(influxDbToken)
+        .bucket(schema)
+        .timeFormat(timeFormat)
+        .measurement(table)
+        .build();  
         LOG.info("InfluxDB connection established.");
+        dataSource = DataSourceFactory.createDataSource(dataSourceConfiguration);
     }
 
     // Method to perform a query with cancellation support
     public VisualQueryResults performQuery(VisualQuery visualQuery) {
-        if (influxDBConnector == null) {
-            initializeConnection();
-        }
-
         String schema = visualQuery.getSchema();
         String id = visualQuery.getTable();
 
-        
+        if (dataSource == null) {
+            initializeDataSource(schema, id);
+        }
+   
         // Perform the query asynchronously
         Method method = MethodManager.getOrInitializeMethod(
             visualQuery.getMethodConfig().getKey(),
-            schema,
-            id,
-            influxDBConnector,
+            dataSource,
             visualQuery.getMethodConfig().getParams()
         );
 
@@ -68,25 +75,24 @@ public class InfluxDBService {
 
     // Close connection method (optional)
     public void closeConnection() {
-        if (influxDBConnector != null) {
-            influxDBConnector.close();
+        if (dataSource != null) {
+            dataSource.closeConnection();
             LOG.info("InfluxDB connection closed.");
         }
     }
 
     public InfluxDBDataset getDatasetById(String schema, String id) {
-        if(influxDBConnector == null) {
-            initializeConnection();
+        if(dataSource == null) {
+            initializeDataSource(schema, id);
         }
-        return (InfluxDBDataset) influxDBConnector.initializeDataset(schema, id);
+        return (InfluxDBDataset) dataSource.getDataset();
     }
 
     public void clearCache() {
         // InfluxDB doesn't have a direct cache clearing mechanism
         // We can force a query cache refresh by executing:
-        influxDBConnector.close();
+        dataSource.closeConnection();
         // Reconnect with fresh client
-        initializeConnection();
     }
 
 }

@@ -1,17 +1,18 @@
 
 package gr.imsi.athenarc.visual.middleware.datasource;
 
-import com.google.common.collect.Iterators;
+import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
 
-import gr.imsi.athenarc.visual.middleware.domain.*;
-import gr.imsi.athenarc.visual.middleware.cache.query.QueryMethod;
+import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.InfluxDBDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.executor.InfluxDBQueryExecutor;
-import gr.imsi.athenarc.visual.middleware.datasource.influxdb.InfluxDBAggregateDataPointsIterator;
-import gr.imsi.athenarc.visual.middleware.datasource.influxdb.InfluxDBAggregateDataPointsIteratorM4;
-import gr.imsi.athenarc.visual.middleware.datasource.influxdb.InfluxDBDataPointsIterator;
+import gr.imsi.athenarc.visual.middleware.datasource.iterator.m4.InfluxDBM4DataPointsIterator;
+import gr.imsi.athenarc.visual.middleware.datasource.iterator.minmax.InfluxDBMinMaxDataPointsIterator;
+import gr.imsi.athenarc.visual.middleware.datasource.iterator.raw.InfluxDBDataPointsIterator;
 import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
+import gr.imsi.athenarc.visual.middleware.datasource.query.QueryMethod;
+import gr.imsi.athenarc.visual.middleware.domain.*;
 
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -33,7 +34,7 @@ public class InfluxDBDatasource implements DataSource {
         this.dataset = dataset;
         this.influxDBQueryExecutor = influxDBQueryExecutor;
     }
-
+    
     @Override
     public DataPoints getDataPoints(long from, long to, List<Integer> measures) {
         Map<Integer, List<TimeInterval>> missingTimeIntervalsPerMeasure = new HashMap<>(measures.size());
@@ -63,13 +64,18 @@ public class InfluxDBDatasource implements DataSource {
     }
 
     @Override
-    public AggregatedDataPoints getAggregatedDataPoints(long from, long to, Map<Integer, List<TimeInterval>> missingIntervalsPerMeasure,
-                                                        Map<Integer, Integer> numberOfGroups, QueryMethod queryMethod) {
-        return new InfluxDBDatasource.InfluxDBAggregatedDatapoints(from, to, missingIntervalsPerMeasure, numberOfGroups, queryMethod);
+    public AggregatedDataPoints getMinMaxDataPoints(long from, long to, Map<Integer, List<TimeInterval>> missingIntervalsPerMeasure,
+                                                        Map<Integer, Integer> numberOfGroups) {
+        return new InfluxDBDatasource.InfluxDBAggregateDatapoints(from, to, missingIntervalsPerMeasure, numberOfGroups, QueryMethod.MIN_MAX);
+    }
+
+    @Override
+    public AggregatedDataPoints getM4DataPoints(long from, long to, Map<Integer, List<TimeInterval>> missingIntervalsPerMeasure,
+                                                        Map<Integer, Integer> numberOfGroups) {
+        return new InfluxDBDatasource.InfluxDBAggregateDatapoints(from, to, missingIntervalsPerMeasure, numberOfGroups, QueryMethod.M4);
     }
 
     final class InfluxDBDatapoints implements DataPoints {
-
         private final InfluxDBQuery influxDBQuery;
         private final Map<String, Integer> measuresMap;
 
@@ -107,22 +113,21 @@ public class InfluxDBDatasource implements DataSource {
             try {
                 List<FluxTable> fluxTables;
                 fluxTables = influxDBQueryExecutor.executeRawInfluxQuery(influxDBQuery);
-                LOG.info("{} tables fetched", fluxTables);
-                
-                return new InfluxDBDataPointsIterator(influxDBQuery.getMissingIntervalsPerMeasure(), measuresMap, fluxTables);
+                return new InfluxDBDataPointsIterator(fluxTables, measuresMap, influxDBQuery.getMissingIntervalsPerMeasure());
             } catch (Exception e){
                 LOG.error("No data in a specified query");
             }
-            return Iterators.concat(new Iterator[0]);
+            return Collections.emptyIterator();
         }
     }
 
-    final class InfluxDBAggregatedDatapoints implements AggregatedDataPoints {
+    final class InfluxDBAggregateDatapoints implements AggregatedDataPoints {
 
         private final InfluxDBQuery influxDBQuery;
-        private final QueryMethod queryMethod;
         private final Map<String, Integer> measuresMap;
-        public InfluxDBAggregatedDatapoints(long from, long to,
+        private final QueryMethod queryMethod;
+
+        public InfluxDBAggregateDatapoints(long from, long to,
                                             Map<Integer, List<TimeInterval>> missingIntervalsPerMeasure,
                                             Map<Integer, Integer> numberOfGroups, QueryMethod queryMethod) {
             Map<String, List<TimeInterval>> missingIntervalsPerMeasureName = missingIntervalsPerMeasure.entrySet().stream()
@@ -155,14 +160,15 @@ public class InfluxDBDatasource implements DataSource {
         public Iterator<AggregatedDataPoint> iterator() {
             if(queryMethod == QueryMethod.M4){
                 List<FluxTable> fluxTables = influxDBQueryExecutor.executeM4InfluxQuery(influxDBQuery);
-                if(fluxTables.size() == 0) return Collections.emptyIterator();
-                return new InfluxDBAggregateDataPointsIteratorM4(fluxTables, measuresMap);
+                if (fluxTables.size() == 0) return Collections.emptyIterator();
+                return new InfluxDBM4DataPointsIterator(fluxTables, measuresMap);
             }
-            else {
+            else if(queryMethod == QueryMethod.MIN_MAX){
                 List<FluxTable> fluxTables = influxDBQueryExecutor.executeMinMaxInfluxQuery(influxDBQuery);
                 if (fluxTables.size() == 0) return Collections.emptyIterator();
-                return new InfluxDBAggregateDataPointsIterator(fluxTables, measuresMap);
+                return new InfluxDBMinMaxDataPointsIterator(fluxTables, measuresMap);
             }
+            return Collections.emptyIterator();
         }
 
         @Override
@@ -196,4 +202,35 @@ public class InfluxDBDatasource implements DataSource {
 
         }
     }
+
+    @Override
+    public AbstractDataset getDataset() {
+        return dataset;
+    }
+
+    public void closeConnection(){
+        influxDBQueryExecutor.closeConnection();
+    }
+
+
+    public Map<Integer, List<DataPoint>> execute(String dbQuery) {
+        List<FluxTable> tables = influxDBQueryExecutor.executeDbQuery(dbQuery);
+        return collect(tables);
+    }
+
+    private Map<Integer, List<DataPoint>> collect(List<FluxTable> tables) {
+        HashMap<Integer, List<DataPoint>> data = new HashMap<>();
+        for (FluxTable fluxTable : tables) {
+            List<FluxRecord> records = fluxTable.getRecords();
+            for (FluxRecord fluxRecord : records) {
+                Integer fieldId = Arrays.asList(dataset.getHeader()).indexOf(fluxRecord.getField());
+                data.computeIfAbsent(fieldId, k -> new ArrayList<>()).add(
+                        new ImmutableDataPoint(Objects.requireNonNull(fluxRecord.getTime()).toEpochMilli(),
+                                Double.parseDouble(Objects.requireNonNull(fluxRecord.getValue()).toString()), fieldId));
+            }
+        }
+        data.forEach((k, v) -> v.sort(Comparator.comparingLong(DataPoint::getTimestamp)));
+        return data;
+    }
+
 }

@@ -11,18 +11,17 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.base.Stopwatch;
 
 import gr.imsi.athenarc.visual.middleware.cache.query.ErrorResults;
-import gr.imsi.athenarc.visual.middleware.cache.query.QueryMethod;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.CsvDatasource;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
+import gr.imsi.athenarc.visual.middleware.datasource.InfluxDBDatasource;
+import gr.imsi.athenarc.visual.middleware.datasource.PostgreSQLDatasource;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.PostgreSQLDataset;
-import gr.imsi.athenarc.visual.middleware.datasource.executor.CsvQueryExecutor;
-import gr.imsi.athenarc.visual.middleware.datasource.executor.InfluxDBQueryExecutor;
-import gr.imsi.athenarc.visual.middleware.datasource.executor.QueryExecutor;
-import gr.imsi.athenarc.visual.middleware.datasource.executor.SQLQueryExecutor;
 import gr.imsi.athenarc.visual.middleware.datasource.query.CsvQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.DataSourceQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.InfluxDBQuery;
 import gr.imsi.athenarc.visual.middleware.datasource.query.SQLQuery;
+import gr.imsi.athenarc.visual.middleware.domain.AggregatedDataPoints;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
 import gr.imsi.athenarc.visual.middleware.domain.TimeInterval;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
@@ -35,11 +34,10 @@ import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 public class M4Method implements Method {
 
 
-    Map<String, DatasourceConnector> dataSourceConnnectors = new HashMap<>();
+    Map<String, DataSource> dataSources = new HashMap<>();
     @Override
-    public void initialize(String schema, String datasetId, DatasourceConnector datasourceConnector,
-            Map<String, String> params) {
-        dataSourceConnnectors.put(datasetId, datasourceConnector);
+    public void initialize(DataSource dataSource, Map<String, String> params) {
+        dataSources.put(dataSource.getDataset().getId(), dataSource);
     }
 
     @Override
@@ -47,10 +45,10 @@ public class M4Method implements Method {
         int width = query.getWidth();
         int height = query.getHeight();
         long from = query.getFrom();
-        DatasourceConnector datasourceConnector = dataSourceConnnectors.get(query.getTable());
+        long to = query.getTo();
+        DataSource dataSource = dataSources.get(query.getTable());
         
-        AbstractDataset dataset = datasourceConnector.initializeDataset(query.getSchema(), query.getTable());
-        QueryExecutor queryExecutor = datasourceConnector.initializeQueryExecutor(dataset);
+        AbstractDataset dataset = dataSource.getDataset();
 
         VisualQueryResults queryResults = new VisualQueryResults();
 
@@ -77,25 +75,21 @@ public class M4Method implements Method {
             numberOfGroups.put(measure, width);
             numberOfGroupsPerMeasureName.put(measureName, width);
         }
-        if(queryExecutor instanceof SQLQueryExecutor)
+
+        if(dataSource instanceof PostgreSQLDatasource)
             dataSourceQuery = new SQLQuery(dataset.getSchema(), dataset.getTableName(), dataset.getTimeFormat(),
                     ((PostgreSQLDataset)dataset).getTimeCol(), ((PostgreSQLDataset)dataset).getIdCol(), ((PostgreSQLDataset)dataset).getValueCol(),
                     query.getFrom(), query.getTo(), missingTimeIntervalsPerMeasureName, numberOfGroupsPerMeasureName);
-        else if (queryExecutor instanceof InfluxDBQueryExecutor)
+        else if (dataSource instanceof InfluxDBDatasource)
             dataSourceQuery = new InfluxDBQuery(dataset.getSchema(), dataset.getTableName(), dataset.getTimeFormat(),
              query.getFrom(), query.getTo(), missingTimeIntervalsPerMeasureName, numberOfGroupsPerMeasureName);
-        else if (queryExecutor instanceof CsvQueryExecutor)
+        else if (dataSource instanceof CsvDatasource)
             dataSourceQuery = new CsvQuery(query.getFrom(), query.getTo(), missingTimeIntervalsPerMeasureName, numberOfGroupsPerMeasureName);
         else {
             throw new RuntimeException("Unsupported query executor");
         }
-        try {
-            m4Results = queryExecutor.execute(dataSourceQuery, QueryMethod.M4);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        m4Results = dataSource.execute(dataSourceQuery.m4QuerySkeleton());
+        
         queryTime = stopwatch.elapsed(TimeUnit.NANOSECONDS) / Math.pow(10d, 9);
         Map<Integer, ErrorResults> error = new HashMap<>();
         for(Integer m : query.getMeasures()){
@@ -113,7 +107,7 @@ public class M4Method implements Method {
 
 
     public boolean isInitialized(String datasetId) {
-        return dataSourceConnnectors.containsKey(datasetId);
+        return dataSources.containsKey(datasetId);
     }
     
 }

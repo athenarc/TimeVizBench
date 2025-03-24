@@ -1,14 +1,14 @@
 package gr.imsi.athenarc.visual.middleware.methods;
 
-import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.InfluxDBConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
+import gr.imsi.athenarc.visual.middleware.datasource.InfluxDBDatasource;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.AbstractDataset;
 import gr.imsi.athenarc.visual.middleware.datasource.executor.QueryExecutor;
 import gr.imsi.athenarc.visual.middleware.domain.DataPoint;
+import gr.imsi.athenarc.visual.middleware.domain.DateTimeUtil;
 import gr.imsi.athenarc.visual.middleware.domain.TimeRange;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.Parameter;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
-import gr.imsi.athenarc.visual.middleware.util.DateTimeUtil;
 
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +28,7 @@ import java.util.Map;
 )
 public class SimpleAverageMethod implements Method {
 
-    Map<String, DatasourceConnector> dataSourceConnnectors = new HashMap<>();
+    Map<String, DataSource> dataSources = new HashMap<>();
 
     @Parameter(
         name = "Interval (ms)",
@@ -47,11 +47,8 @@ public class SimpleAverageMethod implements Method {
      * 2. Required interval parameter is provided
      */
     @Override
-    public void initialize(String schema, String datasetId, DatasourceConnector datasourceConnector, Map<String, String> params) {
-        if(!(datasourceConnector instanceof InfluxDBConnector)) {
-            throw new UnsupportedOperationException("Unsupported executor type");
-        }
-        dataSourceConnnectors.put(datasetId, datasourceConnector);    
+    public void initialize(DataSource dataSource, Map<String, String> params) {
+        dataSources.put(dataSource.getDataset().getId(), dataSource);    
     }
 
     /**
@@ -64,18 +61,16 @@ public class SimpleAverageMethod implements Method {
     public VisualQueryResults executeQuery(VisualQuery query) {
 
         VisualQueryResults results = new VisualQueryResults();
-        DatasourceConnector datasourceConnector = dataSourceConnnectors.get(query.getTable());
-        AbstractDataset dataset = datasourceConnector.initializeDataset(query.getSchema(), query.getTable());
-        QueryExecutor queryExecutor = datasourceConnector.initializeQueryExecutor(dataset);
-        
+        DataSource dataSource = dataSources.get(query.getTable());
+
         try {
             double startTime = System.currentTimeMillis();
             Map<Integer, List<DataPoint>> allData = new HashMap<>();
             
             // Process each measure in the query
             for (Integer measureId : query.getMeasures()) {
-                String dbQuery = createAverageQuery(query, dataset, measureId);
-                Map<Integer, List<DataPoint>> measureData = queryExecutor.execute(dbQuery);
+                String dbQuery = createAverageQuery(query, dataSource.getDataset(), measureId);
+                Map<Integer, List<DataPoint>> measureData = dataSource.execute(dbQuery);
                 // Add this measure's data to the combined results
                 allData.putAll(measureData);
             }

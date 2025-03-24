@@ -2,7 +2,7 @@ package gr.imsi.athenarc.visual.middleware.methods;
 
 import java.util.Map;
 
-import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 
 /**
  * Common interface for all query methods.
@@ -12,12 +12,10 @@ public interface Method {
      * Initialize the method once. This can be where you build caches or set up
      * data structures, using the parameters given.
      *
-     * @param schema             Database schema or measurement name
-     * @param datasetId          Unique dataset/table identifier
-     * @param influxDBConnector  Connector to InfluxDB
+     * @param dataSource         The data source to use
      * @param params             Extra parameters for the method (accuracy, etc.)
      */
-    void initialize(String schema, String datasetId, DatasourceConnector datasourceConnector, Map<String, String> params);
+    void initialize(DataSource dataSource, Map<String, String> params);
 
     /**
      * Execute a query using this method.

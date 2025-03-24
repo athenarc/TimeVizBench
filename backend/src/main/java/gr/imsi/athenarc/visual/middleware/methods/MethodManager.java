@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.reflections.Reflections;
 
-import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 
 public class MethodManager {
@@ -25,9 +25,8 @@ public class MethodManager {
         }
     }
 
-    public static Method getOrInitializeMethod(String methodKey, String schema, String datasetId, 
-            DatasourceConnector connector, Map<String, String> params) {
-        String key = generateKey(methodKey, datasetId);
+    public static Method getOrInitializeMethod(String methodKey, DataSource dataSource, Map<String, String> params) {
+        String key = generateKey(methodKey, dataSource.getDataset().getId());
         String methodName = methodKey.split("-")[0];
         
         return methodInstances.computeIfAbsent(key, k -> {
@@ -39,7 +38,7 @@ public class MethodManager {
                 
                 Constructor<?> constructor = methodClass.getDeclaredConstructor();
                 Method method = (Method) constructor.newInstance();
-                method.initialize(schema, datasetId, connector, params);
+                method.initialize(dataSource, params);
                 return method;
             } catch (Exception e) {
                 throw new RuntimeException("Failed to initialize method: " + methodName, e);

@@ -10,8 +10,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import gr.imsi.athenarc.visual.middleware.cache.MinMaxCache;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.JDBCConnection;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.PostgreSQLConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSourceFactory;
+import gr.imsi.athenarc.visual.middleware.datasource.PostgreSQLDatasource;
+import gr.imsi.athenarc.visual.middleware.datasource.config.PostgreSQLConfiguration;
+import gr.imsi.athenarc.visual.middleware.datasource.connection.JDBCConnection;
 import gr.imsi.athenarc.visual.middleware.datasource.dataset.PostgreSQLDataset;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQuery;
 import gr.imsi.athenarc.visual.middleware.methods.VisualQueryResults;
@@ -30,7 +33,9 @@ public class PostgreSQLService {
     @Value("${postgres.password}")
     private String postgresPassword;
 
-    private PostgreSQLConnector postgreSQLConnector;
+    private String timeFormat = "yyyy-MM-dd[ HH:mm:ss]";
+
+    private DataSource dataSource;
 
 
     // Map to hold the minmaxcache of each dataset
@@ -40,36 +45,40 @@ public class PostgreSQLService {
     public PostgreSQLService() {}
 
 
-    // Method to initialize connection manually
-    public void initializeConnection() throws SQLException {
-        JDBCConnection jdbcConnection = (JDBCConnection) new JDBCConnection(postgresUrl, postgresUsername, postgresPassword).connect();
-        postgreSQLConnector = new PostgreSQLConnector(jdbcConnection);
+    // Method to initialize datasource manually
+    public void initializeDatasource(String schema, String table) throws SQLException {
+        PostgreSQLConfiguration dataSourceConfiguration = new PostgreSQLConfiguration.Builder()
+                    .url(postgresUrl)
+                    .username(postgresUsername)
+                    .password(postgresPassword)
+                    .schema(schema)
+                    .timeFormat(timeFormat)
+                    .table(table)
+                    .build();  
+        dataSource = DataSourceFactory.createDataSource(dataSourceConfiguration);
         LOG.info("PostgreSQL connection established.");
     }
 
     public VisualQueryResults performQuery(VisualQuery visualQuery) throws SQLException {
-        if (postgreSQLConnector == null) {
-            initializeConnection();
-        }
-
         String schema = visualQuery.getSchema();
         String id = visualQuery.getTable();
+        if (dataSource == null) {
+            initializeDatasource(schema, id);
+        }
 
         return null;
     }
 
     // Close connection method (optional)
     public void closeConnection() throws SQLException {
-        if (postgreSQLConnector != null) {
-            postgreSQLConnector.close();
-        }
+        dataSource.closeConnection();
     }
   
     public PostgreSQLDataset getDatasetById(String schema, String id) throws SQLException {
-        if (postgreSQLConnector == null) {
-            initializeConnection();
+        if (dataSource == null) {
+            initializeDatasource(schema, id);
         }
-        return (PostgreSQLDataset) postgreSQLConnector.initializeDataset(schema, id);
+        return (PostgreSQLDataset) dataSource.getDataset();
     }
 
     public void clearCache() {

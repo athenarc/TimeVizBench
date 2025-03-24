@@ -9,10 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import gr.imsi.athenarc.visual.middleware.cache.MinMaxCache;
-import gr.imsi.athenarc.visual.middleware.cache.MinMaxCacheBuilder;
 import gr.imsi.athenarc.visual.middleware.cache.query.Query;
 import gr.imsi.athenarc.visual.middleware.cache.query.QueryResults;
-import gr.imsi.athenarc.visual.middleware.datasource.connector.DatasourceConnector;
+import gr.imsi.athenarc.visual.middleware.datasource.DataSource;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.Parameter;
 import gr.imsi.athenarc.visual.middleware.methods.annotations.VisualMethod;
 
@@ -68,7 +67,8 @@ public class MinMaxCacheMethod implements Method {
     private final ConcurrentHashMap<String, MinMaxCache> cacheMap = new ConcurrentHashMap<>();
    
     @Override
-    public void initialize(String schema, String datasetId, DatasourceConnector datasourceConnector, Map<String, String> params) {
+    public void initialize(DataSource dataSource, Map<String, String> params) {
+        String datasetId = dataSource.getDataset().getId();
         LOG.info("Initializing MinMaxCacheMethod for dataset = {}", datasetId);
 
         // Extract initialization parameters from the 'params' map as needed
@@ -76,14 +76,7 @@ public class MinMaxCacheMethod implements Method {
         
         // Build and store the MinMaxCache for the dataset
         cacheMap.computeIfAbsent(datasetId, key -> {
-            return new MinMaxCacheBuilder()
-                .setDatasourceConnector(datasourceConnector)
-                .setSchema(schema)
-                .setId(datasetId)
-                .setPrefetchingFactor(prefetchingFactor)
-                .setAggFactor(aggFactor)
-                .setDataReductionRatio(dataReductionRatio)
-                .build();
+            return new MinMaxCache(dataSource, prefetchingFactor, aggFactor, dataReductionRatio);
         });
     }
 
@@ -99,7 +92,6 @@ public class MinMaxCacheMethod implements Method {
         int width = visualQuery.getWidth();
         int height = visualQuery.getHeight();
         List<Integer> measures = visualQuery.getMeasures();
-        Map<Integer, Double[]> filter = null;
         if (visualQuery.getParams().containsKey("accuracy")) {
             prefetchingFactor = Float.parseFloat(visualQuery.getParams().get("accuracy"));
         } else {
@@ -107,7 +99,7 @@ public class MinMaxCacheMethod implements Method {
         }
         float accuracy = Float.parseFloat(visualQuery.getParams().get("accuracy"));
 
-        Query minMaxCacheQuery = new Query(from, to, measures, accuracy, width, height, filter);    
+        Query minMaxCacheQuery = new Query(from, to, measures, width, height, accuracy);    
         // Delegate to minMaxCache
         QueryResults minMaxCacheQueryResults =  minMaxCache.executeQuery(minMaxCacheQuery);
 
@@ -118,7 +110,6 @@ public class MinMaxCacheMethod implements Method {
         visualQueryResults.setIoCount(minMaxCacheQueryResults.getIoCount());
         
         Map<String, String> metrics = new HashMap<>();
-        metrics.put("error", minMaxCacheQueryResults.getError().toString());
         visualQueryResults.setMetrics(metrics);
         return visualQueryResults;
     }
