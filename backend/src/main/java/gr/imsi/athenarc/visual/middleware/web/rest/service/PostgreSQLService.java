@@ -35,18 +35,14 @@ public class PostgreSQLService {
 
     private String timeFormat = "yyyy-MM-dd[ HH:mm:ss]";
 
-    private DataSource dataSource;
-
-
-    // Map to hold the minmaxcache of each dataset
-    private final ConcurrentHashMap<String, MinMaxCache> cacheMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, DataSource> dataSources = new ConcurrentHashMap<>();
 
     @Autowired
     public PostgreSQLService() {}
 
 
     // Method to initialize datasource manually
-    public void initializeDatasource(String schema, String table) throws SQLException {
+    public void initializeDataSource(String schema, String table) throws SQLException {
         PostgreSQLConfiguration dataSourceConfiguration = new PostgreSQLConfiguration.Builder()
                     .url(postgresUrl)
                     .username(postgresUsername)
@@ -55,30 +51,24 @@ public class PostgreSQLService {
                     .timeFormat(timeFormat)
                     .table(table)
                     .build();  
-        dataSource = DataSourceFactory.createDataSource(dataSourceConfiguration);
-        LOG.info("PostgreSQL connection established.");
+        dataSources.put(table, DataSourceFactory.createDataSource(dataSourceConfiguration));
     }
 
     public VisualQueryResults performQuery(VisualQuery visualQuery) throws SQLException {
         String schema = visualQuery.getSchema();
         String id = visualQuery.getTable();
-        if (dataSource == null) {
-            initializeDatasource(schema, id);
+        if (dataSources.get(id) == null) {
+            initializeDataSource(schema, id);
         }
 
         return null;
     }
-
-    // Close connection method (optional)
-    public void closeConnection() throws SQLException {
-        dataSource.closeConnection();
-    }
   
     public PostgreSQLDataset getDatasetById(String schema, String id) throws SQLException {
-        if (dataSource == null) {
-            initializeDatasource(schema, id);
+        if (dataSources.get(id) == null) {
+            initializeDataSource(schema, id);
         }
-        return (PostgreSQLDataset) dataSource.getDataset();
+        return (PostgreSQLDataset) dataSources.get(id).getDataset();
     }
 
     public void clearCache() {

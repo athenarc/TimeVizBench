@@ -52,7 +52,11 @@ public abstract class AbstractDataset {
 
     public String[] getHeader() { return header; }
 
-    public void setHeader(String[] header) { this.header = header; }
+    public void setHeader(String[] header) { 
+        // Sort the header array alphabetically
+        Arrays.sort(header);
+        this.header = header; 
+    }
 
     public long getSamplingInterval() {
         return samplingInterval;

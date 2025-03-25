@@ -1,5 +1,7 @@
 package gr.imsi.athenarc.visual.middleware.web.rest.service;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,9 +34,9 @@ public class InfluxDBService {
     @Value("${influxdb.bucket}")
     private String influxDbBucket;
 
-    private DataSource dataSource;
-
     private String timeFormat = "yyyy-MM-dd[ HH:mm:ss]";
+
+    private final ConcurrentHashMap<String, DataSource> dataSources = new ConcurrentHashMap<>();
 
     @Autowired
     public InfluxDBService() {
@@ -51,7 +53,7 @@ public class InfluxDBService {
         .measurement(table)
         .build();  
         LOG.info("InfluxDB connection established.");
-        dataSource = DataSourceFactory.createDataSource(dataSourceConfiguration);
+        dataSources.put(table, DataSourceFactory.createDataSource(dataSourceConfiguration));
     }
 
     // Method to perform a query with cancellation support
@@ -59,40 +61,34 @@ public class InfluxDBService {
         String schema = visualQuery.getSchema();
         String id = visualQuery.getTable();
 
-        if (dataSource == null) {
+        if (!dataSources.containsKey(id)) {
             initializeDataSource(schema, id);
         }
    
         // Perform the query asynchronously
         Method method = MethodManager.getOrInitializeMethod(
             visualQuery.getMethodConfig().getKey(),
-            dataSource,
+            dataSources.get(id),
             visualQuery.getMethodConfig().getParams()
         );
 
-        return method.executeQuery(visualQuery);
-    }
-
-    // Close connection method (optional)
-    public void closeConnection() {
-        if (dataSource != null) {
-            dataSource.closeConnection();
-            LOG.info("InfluxDB connection closed.");
-        }
+        return method.executeQuery(dataSources.get(id), visualQuery);
     }
 
     public InfluxDBDataset getDatasetById(String schema, String id) {
-        if(dataSource == null) {
+        if(!dataSources.containsKey(id)) {
             initializeDataSource(schema, id);
         }
-        return (InfluxDBDataset) dataSource.getDataset();
+        return (InfluxDBDataset) dataSources.get(id).getDataset();
     }
 
     public void clearCache() {
         // InfluxDB doesn't have a direct cache clearing mechanism
         // We can force a query cache refresh by executing:
-        dataSource.closeConnection();
-        // Reconnect with fresh client
+        dataSources.values().forEach(dataSource -> {
+            dataSource.closeConnection();
+        });
+        dataSources.clear();
     }
 
 }

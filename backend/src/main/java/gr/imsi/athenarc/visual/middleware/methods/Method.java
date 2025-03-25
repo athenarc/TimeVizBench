@@ -20,8 +20,9 @@ public interface Method {
     /**
      * Execute a query using this method.
      *
+     * @param dataSource         The data source to query
      * @param query Query object with from/to, measures, filter, etc.
      * @return QueryResults
      */
-    VisualQueryResults executeQuery(VisualQuery query);
+    VisualQueryResults executeQuery(DataSource dataSource, VisualQuery query);
 }

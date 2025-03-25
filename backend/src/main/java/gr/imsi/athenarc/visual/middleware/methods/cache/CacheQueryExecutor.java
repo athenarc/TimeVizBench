@@ -169,7 +169,7 @@ public class CacheQueryExecutor {
             ErrorCalculator errorCalculator = new ErrorCalculator();
             ErrorResults errorResults = new ErrorResults();
             double errorForMeasure = errorCalculator.calculateTotalError(pixelColumns, viewPort, pixelColumnInterval, query.getAccuracy());
-
+            LOG.info("Error for measure {}: {}", measureWithMiss, errorForMeasure);
             if (errorCalculator.hasError()) measuresWithError.add(measureWithMiss);
             errorResults.setError(errorForMeasure);
             errorResults.setFalsePixels(errorCalculator.getFalsePixels());
@@ -206,7 +206,6 @@ public class CacheQueryExecutor {
             List<PixelColumn> pixelColumns = pixelColumnsPerMeasure.get(measure);
 
             List<DataPoint> dataPoints = new ArrayList<>();
-            int i = 0;
             for (PixelColumn pixelColumn : pixelColumns) {
                 Stats pixelColumnStats = pixelColumn.getStats();
                 if (pixelColumnStats.getCount() <= 0) {

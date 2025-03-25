@@ -132,7 +132,6 @@ public class MaxErrorEvaluator {
                 falsePixels.add(pixelColumnFalsePixels);
             }
         }
-        LOG.debug("{}", maxPixelErrorsPerColumn);
         return maxPixelErrorsPerColumn;
     }
 

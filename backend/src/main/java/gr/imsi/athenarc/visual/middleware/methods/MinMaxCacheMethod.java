@@ -81,7 +81,7 @@ public class MinMaxCacheMethod implements Method {
     }
 
     @Override
-    public VisualQueryResults executeQuery(VisualQuery visualQuery) {
+    public VisualQueryResults executeQuery(DataSource dataSource, VisualQuery visualQuery) {
         LOG.info("Executing MinMaxCache query for dataset = {}", visualQuery.getTable());
         MinMaxCache minMaxCache = cacheMap.get(visualQuery.getTable());
         if (minMaxCache == null) {

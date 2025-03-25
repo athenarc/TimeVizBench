@@ -33,19 +33,17 @@ import gr.imsi.athenarc.visual.middleware.methods.cache.query.ErrorResults;
 public class M4Method implements Method {
 
 
-    Map<String, DataSource> dataSources = new HashMap<>();
     @Override
     public void initialize(DataSource dataSource, Map<String, String> params) {
-        dataSources.put(dataSource.getDataset().getId(), dataSource);
+
     }
 
     @Override
-    public VisualQueryResults executeQuery(VisualQuery query) {
+    public VisualQueryResults executeQuery(DataSource dataSource, VisualQuery query) {
         int width = query.getWidth();
         int height = query.getHeight();
         long from = query.getFrom();
         long to = query.getTo();
-        DataSource dataSource = dataSources.get(query.getTable());
         
         AbstractDataset dataset = dataSource.getDataset();
 
@@ -102,11 +100,6 @@ public class M4Method implements Method {
         queryTime = stopwatch.elapsed(TimeUnit.NANOSECONDS) / Math.pow(10d, 9);
         stopwatch.stop();
         return queryResults;
-    }
-
-
-    public boolean isInitialized(String datasetId) {
-        return dataSources.containsKey(datasetId);
     }
     
 }

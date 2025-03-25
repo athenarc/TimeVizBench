@@ -26,8 +26,6 @@ import java.util.Map;
 )
 public class SimpleAverageMethod implements Method {
 
-    Map<String, DataSource> dataSources = new HashMap<>();
-
     @Parameter(
         name = "Interval (ms)",
         description = "The aggregation interval in milliseconds",
@@ -39,14 +37,10 @@ public class SimpleAverageMethod implements Method {
     )
     private long interval; 
 
-    /**
-     * Initializes the method with the given parameters. Validates that:
-     * 1. The connector is an InfluxDB connector
-     * 2. Required interval parameter is provided
-     */
+
     @Override
     public void initialize(DataSource dataSource, Map<String, String> params) {
-        dataSources.put(dataSource.getDataset().getId(), dataSource);    
+
     }
 
     /**
@@ -56,10 +50,9 @@ public class SimpleAverageMethod implements Method {
      * 3. Processing and returning the results
      */
     @Override
-    public VisualQueryResults executeQuery(VisualQuery query) {
+    public VisualQueryResults executeQuery(DataSource dataSource, VisualQuery query) {
 
         VisualQueryResults results = new VisualQueryResults();
-        DataSource dataSource = dataSources.get(query.getTable());
 
         try {
             double startTime = System.currentTimeMillis();

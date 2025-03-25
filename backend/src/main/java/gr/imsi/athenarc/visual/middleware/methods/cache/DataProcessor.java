@@ -75,9 +75,11 @@ public class DataProcessor {
             } else if (span instanceof AggregateTimeSeriesSpan) {
                 // Add aggregated data points to pixel columns with errors
                 Iterator<AggregatedDataPoint> iterator = ((AggregateTimeSeriesSpan) span).iterator(from, to);
+                int i = 0;
                 while (iterator.hasNext()) {
                     AggregatedDataPoint aggregatedDataPoint = iterator.next();
                     addAggregatedDataPointToPixelColumns(from, to, viewPort, pixelColumns, aggregatedDataPoint);
+                    i++;
                 }
             } else {
                 throw new IllegalArgumentException("Time Series Span Read Error");
@@ -175,6 +177,7 @@ public class DataProcessor {
 
     private void addAggregatedDataPointToPixelColumns(long from, long to, ViewPort viewPort, List<PixelColumn> pixelColumns, AggregatedDataPoint aggregatedDataPoint) {
         int pixelColumnIndex = getPixelColumnForTimestamp(aggregatedDataPoint.getFrom(), from, to, viewPort.getWidth());
+        int i = 0;
         if (pixelColumnIndex < viewPort.getWidth() && !pixelColumns.get(pixelColumnIndex).hasNoError()) {
             pixelColumns.get(pixelColumnIndex).addAggregatedDataPoint(aggregatedDataPoint);
         }
