@@ -718,8 +718,9 @@ const Dashboard = () => {
           .attr('class', 'm4-overlay')
           .datum(m4Data)
           .attr('fill', 'none')
-          .attr('stroke', 'red')  
-          .attr('stroke-width', 1)  
+          .attr('stroke', 'green')  
+          .attr('stroke-width', 1 / window.devicePixelRatio)
+          .style('shape-rendering', 'crispEdges')
           .attr('stroke-opacity', 0.6)  
           .attr('d', line);
 
@@ -785,7 +786,7 @@ const Dashboard = () => {
                 .attr('y1', 15)
                 .attr('x2', width - 105)
                 .attr('y2', 15)
-                .attr('stroke', 'red')  // Match the color of the reference line
+                .attr('stroke', 'green')  // Match the color of the reference line
                 .attr('stroke-width', 2);
 
               svg.append('text')
@@ -818,7 +819,6 @@ const Dashboard = () => {
     });
   },[ssimValues]);
 
-  // Add debugging for reference data fetching
   const fetchReferenceData = async () => {
     if (!metadata || !from || !to || !measures.length) {
       console.log("Cannot fetch reference data: missing metadata, time range or measures");
